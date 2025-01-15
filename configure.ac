@@ -115,6 +115,18 @@ AS_IF([test "x$enable_codecoverage" = "xyes"], [
   CFLAGS="$CFLAGS -fprofile-instr-generate -fcoverage-mapping"
 ])
 
+AC_ARG_ENABLE([threadsanitizer],
+  AS_HELP_STRING([--enable-threadsanitizer],
+        [build with thread-sanitizer (TSan) instrumentation]))
+AS_IF([test "x$enable_threadsanitizer" = "xyes"], [
+  AC_MSG_NOTICE([ enabling thread-sanitizer, see https://clang.llvm.org/docs/ThreadSanitizer.html ])
+
+  AS_IF([test x != "x$sanitizeopts"], [
+    AC_MSG_ERROR(Cannot enable multiple checkers at once)
+  ])
+  sanitizeopts="thread"
+])
+
 AC_ARG_ENABLE([memcheck],
   AS_HELP_STRING([--enable-memcheck],
         [build with memcheck (memory-sanitizer) instrumentation]))
@@ -335,7 +347,7 @@ AC_ARG_ENABLE(tracy,
     AS_HELP_STRING([--enable-tracy],
         [Enable 'tracy' profiler/tracer client stub]))
 AM_CONDITIONAL(USE_TRACY, [test x$enable_tracy = xyes])
-tracy_CFLAGS='-DTRACY_ENABLE -DTRACY_ON_DEMAND -DTRACY_NO_BROADCAST -DTRACY_ONLY_LOCALHOST -DTRACY_ONLY_IPV4 -DTRACY_DELAYED_INIT -DTRACY_MANUAL_LIFETIME'
+tracy_CFLAGS='-DTRACY_ENABLE -DTRACY_ON_DEMAND -DTRACY_NO_BROADCAST -DTRACY_ONLY_LOCALHOST -DTRACY_ONLY_IPV4 -DTRACY_DELAYED_INIT'
 if test x"$enable_tracy" = xyes; then
     case "${host_os}" in
         *darwin*)
@@ -346,6 +358,18 @@ if test x"$enable_tracy" = xyes; then
     esac
 fi
 AC_SUBST(tracy_CFLAGS)
+
+AC_ARG_ENABLE(tracy-memory-tracking,
+    AS_HELP_STRING([--enable-tracy-memory-tracking],
+        [Enable 'tracy' profiler/tracer memory tracking code (slow)]))
+AM_CONDITIONAL(USE_TRACY_MEMORY_TRACKING, [test x$enable_tracy_memory_tracking = xyes])
+
+if test x"$enable_tracy" = xyes -a x"$enable_asan" = xyes; then
+       AC_MSG_ERROR([--enable-asan is not compatible with --enable-tracy])
+fi
+if test x"$enable_tracy_memory_tracking" = xyes -a x"$enable_asan" = xyes; then
+       AC_MSG_ERROR([--enable-asan is not compatible with --enable-tracy-memory-tracking])
+fi
 
 AC_ARG_ENABLE(tracy-gui,
     AS_HELP_STRING([--enable-tracy-gui],
@@ -384,12 +408,6 @@ AC_ARG_ENABLE(next-protocol-version-unsafe-for-production,
         [Enable next protocol version UNSAFE FOR PRODUCTION]))
 AM_CONDITIONAL(ENABLE_NEXT_PROTOCOL_VERSION_UNSAFE_FOR_PRODUCTION,
     [test x$enable_next_protocol_version_unsafe_for_production = xyes])
-
-AC_ARG_ENABLE(protocol-upgrade-via-soroban-env-host-prev,
-    AS_HELP_STRING([--enable-protocol-upgrade-via-soroban-env-host-prev],
-        [Pass "--feature=soroban-env-host-prev" to "cargo build" to enable protocol upgrades]))
-AM_CONDITIONAL(ENABLE_PROTOCOL_UPGRADE_VIA_SOROBAN_ENV_HOST_PREV,
-    [test x$enable_protocol_upgrade_via_soroban_env_host_prev = xyes])
 
 AC_ARG_ENABLE(libunwind,
     AS_HELP_STRING([--disable-libunwind],

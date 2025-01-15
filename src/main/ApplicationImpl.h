@@ -35,6 +35,7 @@ class LedgerTxnRoot;
 class InMemoryLedgerTxn;
 class InMemoryLedgerTxnRoot;
 class LoadGenerator;
+class AppConnector;
 
 class ApplicationImpl : public Application
 {
@@ -61,7 +62,7 @@ class ApplicationImpl : public Application
     virtual TmpDirManager& getTmpDirManager() override;
     virtual LedgerManager& getLedgerManager() override;
     virtual BucketManager& getBucketManager() override;
-    virtual CatchupManager& getCatchupManager() override;
+    virtual LedgerApplyManager& getLedgerApplyManager() override;
     virtual HistoryArchiveManager& getHistoryArchiveManager() override;
     virtual HistoryManager& getHistoryManager() override;
     virtual Maintainer& getMaintainer() override;
@@ -76,14 +77,26 @@ class ApplicationImpl : public Application
     virtual WorkScheduler& getWorkScheduler() override;
     virtual BanManager& getBanManager() override;
     virtual StatusManager& getStatusManager() override;
+    virtual AppConnector& getAppConnector() override;
 
     virtual asio::io_context& getWorkerIOContext() override;
+    virtual asio::io_context& getEvictionIOContext() override;
+    virtual asio::io_context& getOverlayIOContext() override;
+    virtual asio::io_context& getLedgerCloseIOContext() override;
+
     virtual void postOnMainThread(std::function<void()>&& f, std::string&& name,
                                   Scheduler::ActionType type) override;
     virtual void postOnBackgroundThread(std::function<void()>&& f,
                                         std::string jobName) override;
+    virtual void postOnEvictionBackgroundThread(std::function<void()>&& f,
+                                                std::string jobName) override;
 
+    virtual void postOnOverlayThread(std::function<void()>&& f,
+                                     std::string jobName) override;
+    virtual void postOnLedgerCloseThread(std::function<void()>&& f,
+                                         std::string jobName) override;
     virtual void start() override;
+    void startServices();
 
     // Stops the worker io_context, which should cause the threads to exit once
     // they finish running any work-in-progress. If you want a more abrupt exit
@@ -106,6 +119,8 @@ class ApplicationImpl : public Application
     virtual void generateLoad(GeneratedLoadConfig cfg) override;
 
     virtual LoadGenerator& getLoadGenerator() override;
+
+    virtual Config& getMutableConfig() override;
 #endif
 
     virtual void applyCfgCommands() override;
@@ -123,13 +138,6 @@ class ApplicationImpl : public Application
 
     virtual AbstractLedgerTxnParent& getLedgerTxnRoot() override;
 
-    virtual void resetDBForInMemoryMode() override;
-
-  protected:
-    std::unique_ptr<LedgerManager>
-        mLedgerManager;              // allow to change that for tests
-    std::unique_ptr<Herder> mHerder; // allow to change that for tests
-
   private:
     VirtualClock& mVirtualClock;
     Config mConfig;
@@ -146,12 +154,26 @@ class ApplicationImpl : public Application
     // subsystems.
 
     asio::io_context mWorkerIOContext;
+    std::unique_ptr<asio::io_context> mEvictionIOContext;
     std::unique_ptr<asio::io_context::work> mWork;
+    std::unique_ptr<asio::io_context::work> mEvictionWork;
+
+    std::unique_ptr<asio::io_context> mOverlayIOContext;
+    std::unique_ptr<asio::io_context::work> mOverlayWork;
+
+    std::unique_ptr<asio::io_context> mLedgerCloseIOContext;
+    std::unique_ptr<asio::io_context::work> mLedgerCloseWork;
 
     std::unique_ptr<BucketManager> mBucketManager;
     std::unique_ptr<Database> mDatabase;
     std::unique_ptr<OverlayManager> mOverlayManager;
-    std::unique_ptr<CatchupManager> mCatchupManager;
+
+  protected:
+    std::unique_ptr<LedgerManager>
+        mLedgerManager;              // allow to change that for tests
+    std::unique_ptr<Herder> mHerder; // allow to change that for tests
+  private:
+    std::unique_ptr<LedgerApplyManager> mLedgerApplyManager;
     std::unique_ptr<HerderPersistence> mHerderPersistence;
     std::unique_ptr<HistoryArchiveManager> mHistoryArchiveManager;
     std::unique_ptr<HistoryManager> mHistoryManager;
@@ -163,6 +185,7 @@ class ApplicationImpl : public Application
     std::unique_ptr<BanManager> mBanManager;
     std::unique_ptr<StatusManager> mStatusManager;
     std::unique_ptr<AbstractLedgerTxnParent> mLedgerTxnRoot;
+    std::unique_ptr<AppConnector> mAppConnector;
 
     // These two exist for use in MODE_USES_IN_MEMORY_LEDGER only: the
     // mInMemoryLedgerTxnRoot is a _stub_ AbstractLedgerTxnParent that refuses
@@ -171,12 +194,15 @@ class ApplicationImpl : public Application
     // the "effective" in-memory root transaction, is returned when a client
     // requests the root.
     //
-    // Note that using this only works when the ledger can fit in RAM -- as it
-    // is held in the never-committing LedgerTxn in its entirety -- so if it
-    // ever grows beyond RAM-size you need to use a mode with some sort of
-    // database on secondary storage.
+    // This is only used in testing scenarios where we need to commit directly
+    // to the LedgerTxn root and bypass the normal ledger close process (since
+    // BucketListDB requires a full ledger close to update DB state). In the
+    // future, this should be removed in favor of tests that are all compatible
+    // with BucketListDB: https://github.com/stellar/stellar-core/issues/4570.
+#ifdef BUILD_TESTS
     std::unique_ptr<InMemoryLedgerTxnRoot> mInMemoryLedgerTxnRoot;
     std::unique_ptr<InMemoryLedgerTxn> mNeverCommittingLedgerTxn;
+#endif
 
     std::unique_ptr<CommandHandler> mCommandHandler;
 
@@ -185,11 +211,20 @@ class ApplicationImpl : public Application
 #endif
 
     std::vector<std::thread> mWorkerThreads;
+    std::optional<std::thread> mOverlayThread;
+    std::optional<std::thread> mLedgerCloseThread;
+
+    // Unlike mWorkerThreads (which are low priority), eviction scans require a
+    // medium priority thread. In the future, this may become a more general
+    // higher-priority worker thread type, but for now we only need a single
+    // thread for eviction scans.
+    std::optional<std::thread> mEvictionThread;
 
     asio::signal_set mStopSignals;
 
     bool mStarted;
-    bool mStopping;
+    std::atomic<bool> mStopping;
+    bool mLedgerCloseThreadStopped{false};
 
     VirtualTimer mStoppingTimer;
     VirtualTimer mSelfCheckTimer;
@@ -197,6 +232,9 @@ class ApplicationImpl : public Application
     std::unique_ptr<medida::MetricsRegistry> mMetrics;
     medida::Timer& mPostOnMainThreadDelay;
     medida::Timer& mPostOnBackgroundThreadDelay;
+    medida::Timer& mPostOnOverlayThreadDelay;
+    medida::Timer& mPostOnLedgerCloseThreadDelay;
+
     VirtualClock::system_time_point mStartedOn;
 
     Hash mNetworkID;
@@ -229,5 +267,6 @@ class ApplicationImpl : public Application
 
     void upgradeToCurrentSchemaAndMaybeRebuildLedger(bool applyBuckets,
                                                      bool forceRebuild);
+    void shutdownLedgerCloseThread();
 };
 }

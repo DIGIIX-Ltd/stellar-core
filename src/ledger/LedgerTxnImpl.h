@@ -4,9 +4,11 @@
 // under the Apache License, Version 2.0. See the COPYING file at the root
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
+#include "bucket/BucketSnapshotManager.h"
 #include "database/Database.h"
 #include "ledger/LedgerTxn.h"
 #include "util/RandomEvictionCache.h"
+#include "util/UnorderedSet.h"
 #include <list>
 #include <optional>
 #ifdef USE_POSTGRES
@@ -19,12 +21,7 @@
 namespace stellar
 {
 
-// Precondition: The keys associated with entries are unique and constitute a
-// subset of keys
-template <typename KeySetT>
-UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-populateLoadedEntries(KeySetT const& keys,
-                      std::vector<LedgerEntry> const& entries);
+class SearchableLiveBucketListSnapshot;
 
 class EntryIterator::AbstractImpl
 {
@@ -58,52 +55,10 @@ class EntryIterator::AbstractImpl
 // reorganizing the relevant parts of soci.
 class BulkLedgerEntryChangeAccumulator
 {
-
-    std::vector<EntryIterator> mAccountsToUpsert;
-    std::vector<EntryIterator> mAccountsToDelete;
-    std::vector<EntryIterator> mAccountDataToUpsert;
-    std::vector<EntryIterator> mAccountDataToDelete;
-    std::vector<EntryIterator> mClaimableBalanceToUpsert;
-    std::vector<EntryIterator> mClaimableBalanceToDelete;
     std::vector<EntryIterator> mOffersToUpsert;
     std::vector<EntryIterator> mOffersToDelete;
-    std::vector<EntryIterator> mTrustLinesToUpsert;
-    std::vector<EntryIterator> mTrustLinesToDelete;
-    std::vector<EntryIterator> mLiquidityPoolToUpsert;
-    std::vector<EntryIterator> mLiquidityPoolToDelete;
-    std::vector<EntryIterator> mContractDataToUpsert;
-    std::vector<EntryIterator> mContractDataToDelete;
-    std::vector<EntryIterator> mContractCodeToUpsert;
-    std::vector<EntryIterator> mContractCodeToDelete;
-    std::vector<EntryIterator> mConfigSettingsToUpsert;
-    std::vector<EntryIterator> mTTLToUpsert;
-    std::vector<EntryIterator> mTTLToDelete;
 
   public:
-    std::vector<EntryIterator>&
-    getAccountsToUpsert()
-    {
-        return mAccountsToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getAccountsToDelete()
-    {
-        return mAccountsToDelete;
-    }
-
-    std::vector<EntryIterator>&
-    getTrustLinesToUpsert()
-    {
-        return mTrustLinesToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getTrustLinesToDelete()
-    {
-        return mTrustLinesToDelete;
-    }
-
     std::vector<EntryIterator>&
     getOffersToUpsert()
     {
@@ -116,85 +71,7 @@ class BulkLedgerEntryChangeAccumulator
         return mOffersToDelete;
     }
 
-    std::vector<EntryIterator>&
-    getAccountDataToUpsert()
-    {
-        return mAccountDataToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getAccountDataToDelete()
-    {
-        return mAccountDataToDelete;
-    }
-
-    std::vector<EntryIterator>&
-    getClaimableBalanceToUpsert()
-    {
-        return mClaimableBalanceToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getClaimableBalanceToDelete()
-    {
-        return mClaimableBalanceToDelete;
-    }
-
-    std::vector<EntryIterator>&
-    getLiquidityPoolToUpsert()
-    {
-        return mLiquidityPoolToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getLiquidityPoolToDelete()
-    {
-        return mLiquidityPoolToDelete;
-    }
-
-    std::vector<EntryIterator>&
-    getConfigSettingsToUpsert()
-    {
-        return mConfigSettingsToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getContractDataToUpsert()
-    {
-        return mContractDataToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getContractDataToDelete()
-    {
-        return mContractDataToDelete;
-    }
-
-    std::vector<EntryIterator>&
-    getContractCodeToUpsert()
-    {
-        return mContractCodeToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getContractCodeToDelete()
-    {
-        return mContractCodeToDelete;
-    }
-
-    std::vector<EntryIterator>&
-    getTTLToUpsert()
-    {
-        return mTTLToUpsert;
-    }
-
-    std::vector<EntryIterator>&
-    getTTLToDelete()
-    {
-        return mTTLToDelete;
-    }
-
-    bool accumulate(EntryIterator const& iter, bool bucketListDBEnabled);
+    bool accumulate(EntryIterator const& iter);
 };
 
 // Many functions in LedgerTxn::Impl provide a basic exception safety
@@ -218,6 +95,8 @@ class LedgerTxn::Impl
     std::unique_ptr<LedgerHeader> mHeader;
     std::shared_ptr<LedgerTxnHeader::Impl> mActiveHeader;
     EntryMap mEntry;
+
+    RestoredKeys mRestoredKeys;
     UnorderedMap<InternalLedgerKey, std::shared_ptr<EntryImplBase>> mActive;
     bool const mShouldUpdateLastModified;
     bool mIsSealed;
@@ -459,7 +338,8 @@ class LedgerTxn::Impl
 
     void commit() noexcept;
 
-    void commitChild(EntryIterator iter, LedgerTxnConsistency cons) noexcept;
+    void commitChild(EntryIterator iter, RestoredKeys const& restoredKeys,
+                     LedgerTxnConsistency cons) noexcept;
 
     // create has the basic exception safety guarantee. If it throws an
     // exception, then
@@ -480,6 +360,20 @@ class LedgerTxn::Impl
     //   modified
     // - the entry cache may be, but is not guaranteed to be, cleared.
     void erase(InternalLedgerKey const& key);
+
+    // restoreFromHotArchive has the basic exception safety guarantee. If it
+    // throws an exception, then
+    // - the prepared statement cache may be, but is not guaranteed to be,
+    //   modified
+    void restoreFromHotArchive(LedgerTxn& self, LedgerEntry const& entry,
+                               uint32_t ttl);
+
+    // restoreFromLiveBucketList has the basic exception safety guarantee. If it
+    // throws an exception, then
+    // - the prepared statement cache may be, but is not guaranteed to be,
+    //   modified
+    void restoreFromLiveBucketList(LedgerTxn& self, LedgerKey const& key,
+                                   uint32_t ttl);
 
     // getAllOffers has the basic exception safety guarantee. If it throws an
     // exception, then
@@ -554,6 +448,12 @@ class LedgerTxn::Impl
     void getAllEntries(std::vector<LedgerEntry>& initEntries,
                        std::vector<LedgerEntry>& liveEntries,
                        std::vector<LedgerKey>& deadEntries);
+    // getRestoredHotArchiveKeys and getRestoredLiveBucketListKeys
+    // have the strong exception safety guarantee
+    UnorderedSet<LedgerKey> const& getRestoredHotArchiveKeys() const;
+    UnorderedSet<LedgerKey> const& getRestoredLiveBucketListKeys() const;
+
+    LedgerKeySet getAllTTLKeysWithoutSealing() const;
 
     // getNewestVersion has the basic exception safety guarantee. If it throws
     // an exception, then
@@ -635,7 +535,9 @@ class LedgerTxn::Impl
     // unsealHeader has the same exception safety guarantee as f
     void unsealHeader(LedgerTxn& self, std::function<void(LedgerHeader&)> f);
 
-    uint32_t prefetch(UnorderedSet<LedgerKey> const& keys);
+    uint32_t prefetchClassic(UnorderedSet<LedgerKey> const& keys);
+    uint32_t prefetchSoroban(UnorderedSet<LedgerKey> const& keys,
+                             LedgerKeyMeter* lkMeter);
 
     double getPrefetchHitRate() const;
 
@@ -732,11 +634,14 @@ class LedgerTxnRoot::Impl
     size_t const mMaxBestOffersBatchSize;
 
     Application& mApp;
+    std::unique_ptr<SessionWrapper> mSession;
+
     std::unique_ptr<LedgerHeader> mHeader;
     mutable EntryCache mEntryCache;
     mutable BestOffers mBestOffers;
     mutable uint64_t mPrefetchHits{0};
     mutable uint64_t mPrefetchMisses{0};
+    mutable SearchableSnapshotConstPtr mSearchableBucketListSnapshot;
 
     size_t mBulkLoadBatchSize;
     std::unique_ptr<soci::transaction> mTransaction;
@@ -748,8 +653,6 @@ class LedgerTxnRoot::Impl
 
     void throwIfChild() const;
 
-    std::shared_ptr<LedgerEntry const> loadAccount(LedgerKey const& key) const;
-    std::shared_ptr<LedgerEntry const> loadData(LedgerKey const& key) const;
     std::shared_ptr<LedgerEntry const> loadOffer(LedgerKey const& key) const;
     std::vector<LedgerEntry> loadAllOffers() const;
     std::deque<LedgerEntry>::const_iterator
@@ -765,57 +668,12 @@ class LedgerTxnRoot::Impl
     loadOffersByAccountAndAsset(AccountID const& accountID,
                                 Asset const& asset) const;
     std::vector<LedgerEntry> loadOffers(StatementContext& prep) const;
-    std::vector<InflationWinner> loadInflationWinners(size_t maxWinners,
-                                                      int64_t minBalance) const;
-    std::shared_ptr<LedgerEntry const>
-    loadTrustLine(LedgerKey const& key) const;
-    std::vector<LedgerEntry>
-    loadPoolShareTrustLinesByAccountAndAsset(AccountID const& accountID,
-                                             Asset const& asset) const;
-    std::shared_ptr<LedgerEntry const>
-    loadClaimableBalance(LedgerKey const& key) const;
-    std::shared_ptr<LedgerEntry const>
-    loadLiquidityPool(LedgerKey const& key) const;
-    std::shared_ptr<LedgerEntry const>
-    loadContractData(LedgerKey const& key) const;
-    std::shared_ptr<LedgerEntry const>
-    loadContractCode(LedgerKey const& key) const;
-    std::shared_ptr<LedgerEntry const>
-    loadConfigSetting(LedgerKey const& key) const;
-    std::shared_ptr<LedgerEntry const> loadTTL(LedgerKey const& key) const;
 
     void bulkApply(BulkLedgerEntryChangeAccumulator& bleca,
                    size_t bufferThreshold, LedgerTxnConsistency cons);
-    void bulkUpsertAccounts(std::vector<EntryIterator> const& entries);
-    void bulkDeleteAccounts(std::vector<EntryIterator> const& entries,
-                            LedgerTxnConsistency cons);
-    void bulkUpsertTrustLines(std::vector<EntryIterator> const& entries);
-    void bulkDeleteTrustLines(std::vector<EntryIterator> const& entries,
-                              LedgerTxnConsistency cons);
     void bulkUpsertOffers(std::vector<EntryIterator> const& entries);
     void bulkDeleteOffers(std::vector<EntryIterator> const& entries,
                           LedgerTxnConsistency cons);
-    void bulkUpsertAccountData(std::vector<EntryIterator> const& entries);
-    void bulkDeleteAccountData(std::vector<EntryIterator> const& entries,
-                               LedgerTxnConsistency cons);
-    void bulkUpsertClaimableBalance(std::vector<EntryIterator> const& entries);
-    void bulkDeleteClaimableBalance(std::vector<EntryIterator> const& entries,
-                                    LedgerTxnConsistency cons);
-    void bulkUpsertLiquidityPool(std::vector<EntryIterator> const& entries);
-    void bulkDeleteLiquidityPool(std::vector<EntryIterator> const& entries,
-                                 LedgerTxnConsistency cons);
-    void bulkUpsertContractData(std::vector<EntryIterator> const& entries);
-    void bulkDeleteContractData(std::vector<EntryIterator> const& entries,
-                                LedgerTxnConsistency cons);
-    void bulkUpsertContractCode(std::vector<EntryIterator> const& entries);
-    void bulkDeleteContractCode(std::vector<EntryIterator> const& entries,
-                                LedgerTxnConsistency cons);
-    void bulkUpsertConfigSettings(std::vector<EntryIterator> const& entries);
-    void bulkUpsertTTL(std::vector<EntryIterator> const& entries);
-    void bulkDeleteTTL(std::vector<EntryIterator> const& entries,
-                       LedgerTxnConsistency cons);
-
-    static std::string tableFromLedgerEntryType(LedgerEntryType let);
 
     // The entry cache maintains relatively strong invariants:
     //
@@ -840,26 +698,7 @@ class LedgerTxnRoot::Impl
                                          Asset const& selling) const;
 
     UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadAccounts(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadTrustLines(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
     bulkLoadOffers(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadData(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadClaimableBalance(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadLiquidityPool(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadContractData(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadContractCode(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadConfigSettings(UnorderedSet<LedgerKey> const& keys) const;
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-    bulkLoadTTL(UnorderedSet<LedgerKey> const& keys) const;
-
     std::deque<LedgerEntry>::const_iterator
     loadNextBestOffersIntoCache(BestOffersEntryPtr cached, Asset const& buying,
                                 Asset const& selling);
@@ -868,6 +707,12 @@ class LedgerTxnRoot::Impl
         std::deque<LedgerEntry>::const_iterator const& end);
 
     bool areEntriesMissingInCacheForOffer(OfferEntry const& oe);
+
+    SearchableLiveBucketListSnapshot const&
+    getSearchableLiveBucketListSnapshot() const;
+
+    uint32_t prefetchInternal(UnorderedSet<LedgerKey> const& keys,
+                              LedgerKeyMeter* lkMeter = nullptr);
 
   public:
     // Constructor has the strong exception safety guarantee
@@ -883,28 +728,19 @@ class LedgerTxnRoot::Impl
     // addChild has the strong exception safety guarantee.
     void addChild(AbstractLedgerTxn& child, TransactionMode mode);
 
-    void commitChild(EntryIterator iter, LedgerTxnConsistency cons) noexcept;
+    void commitChild(EntryIterator iter, RestoredKeys const& restoredKeys,
+                     LedgerTxnConsistency cons) noexcept;
 
-    // countObjects has the strong exception safety guarantee.
-    uint64_t countObjects(LedgerEntryType let) const;
-    uint64_t countObjects(LedgerEntryType let,
-                          LedgerRange const& ledgers) const;
+    // countOffers has the strong exception safety guarantee.
+    uint64_t countOffers(LedgerRange const& ledgers) const;
 
-    // deleteObjectsModifiedOnOrAfterLedger has no exception safety guarantees.
-    void deleteObjectsModifiedOnOrAfterLedger(uint32_t ledger) const;
+    SessionWrapper& getSession() const;
 
-    // dropAccounts, dropData, dropOffers, and dropTrustLines have no exception
-    // safety guarantees.
-    void dropAccounts(bool rebuild);
-    void dropData(bool rebuild);
-    void dropOffers(bool rebuild);
-    void dropTrustLines(bool rebuild);
-    void dropClaimableBalances(bool rebuild);
-    void dropLiquidityPools(bool rebuild);
-    void dropContractData(bool rebuild);
-    void dropContractCode(bool rebuild);
-    void dropConfigSettings(bool rebuild);
-    void dropTTL(bool rebuild);
+    // deleteOffersModifiedOnOrAfterLedger has no exception safety guarantees.
+    void deleteOffersModifiedOnOrAfterLedger(uint32_t ledger) const;
+
+    // no exception safety guarantees.
+    void dropOffers();
 
 #ifdef BUILD_TESTS
     void resetForFuzzer();
@@ -966,7 +802,9 @@ class LedgerTxnRoot::Impl
     // Prefetch some or all of given keys in batches. Note that no prefetching
     // could occur if the cache is at its fill ratio. Returns number of keys
     // prefetched.
-    uint32_t prefetch(UnorderedSet<LedgerKey> const& keys);
+    uint32_t prefetchClassic(UnorderedSet<LedgerKey> const& keys);
+    uint32_t prefetchSoroban(UnorderedSet<LedgerKey> const& keys,
+                             LedgerKeyMeter* lkMeter);
 
     double getPrefetchHitRate() const;
 

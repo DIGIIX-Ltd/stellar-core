@@ -25,6 +25,8 @@ class Timer;
 
 namespace stellar
 {
+constexpr uint32 const SOROBAN_TRANSACTION_QUEUE_SIZE_MULTIPLIER = 2;
+
 class Application;
 class LedgerManager;
 class HerderSCPDriver;
@@ -73,7 +75,8 @@ class HerderImpl : public Herder
 
     void start() override;
 
-    void lastClosedLedgerIncreased(bool latest) override;
+    void lastClosedLedgerIncreased(bool latest,
+                                   TxSetXDRFrameConstPtr txSet) override;
 
     SCP& getSCP();
     HerderSCPDriver&
@@ -102,12 +105,12 @@ class HerderImpl : public Herder
 #ifdef BUILD_TESTS
     EnvelopeStatus recvSCPEnvelope(SCPEnvelope const& envelope,
                                    const SCPQuorumSet& qset,
-                                   TxSetFrameConstPtr txset) override;
+                                   TxSetXDRFrameConstPtr txset) override;
     EnvelopeStatus recvSCPEnvelope(SCPEnvelope const& envelope,
                                    const SCPQuorumSet& qset,
                                    StellarMessage const& txset) override;
 
-    void externalizeValue(TxSetFrameConstPtr txSet, uint32_t ledgerSeq,
+    void externalizeValue(TxSetXDRFrameConstPtr txSet, uint32_t ledgerSeq,
                           uint64_t closeTime,
                           xdr::xvector<UpgradeType, 6> const& upgrades,
                           std::optional<SecretKey> skToSignValue) override;
@@ -126,19 +129,32 @@ class HerderImpl : public Herder
     {
         mMaxClassicTxSize = std::make_optional<uint32_t>(bytes);
     }
+    void
+    setMaxTxSize(uint32 bytes) override
+    {
+        mMaxTxSize = bytes;
+    }
+    std::optional<uint32_t> mFlowControlExtraBuffer;
+    void
+    setFlowControlExtraBufferSize(uint32 bytes) override
+    {
+        mFlowControlExtraBuffer = std::make_optional<uint32_t>(bytes);
+    }
 #endif
     void sendSCPStateToPeer(uint32 ledgerSeq, Peer::pointer peer) override;
 
     bool recvSCPQuorumSet(Hash const& hash, const SCPQuorumSet& qset) override;
-    bool recvTxSet(Hash const& hash, TxSetFrameConstPtr txset) override;
+    bool recvTxSet(Hash const& hash, TxSetXDRFrameConstPtr txset) override;
     void peerDoesntHave(MessageType type, uint256 const& itemID,
                         Peer::pointer peer) override;
-    TxSetFrameConstPtr getTxSet(Hash const& hash) override;
+    TxSetXDRFrameConstPtr getTxSet(Hash const& hash) override;
     SCPQuorumSetPtr getQSet(Hash const& qSetHash) override;
 
     void processSCPQueue();
 
     uint32_t getMaxClassicTxSize() const override;
+    uint32_t getFlowControlExtraBuffer() const override;
+
     uint32_t
     getMaxTxSize() const override
     {
@@ -151,8 +167,6 @@ class HerderImpl : public Herder
 
     bool isNewerNominationOrBallotSt(SCPStatement const& oldSt,
                                      SCPStatement const& newSt) override;
-
-    SequenceNumber getMaxSeqInPendingTxs(AccountID const&) override;
 
     uint32_t getMostRecentCheckpointSeq() override;
 
@@ -181,6 +195,8 @@ class HerderImpl : public Herder
     makeStellarValue(Hash const& txSetHash, uint64_t closeTime,
                      xdr::xvector<UpgradeType, 6> const& upgrades,
                      SecretKey const& s) override;
+
+    virtual void beginApply() override;
 
     void startTxSetGCTimer();
 
@@ -235,7 +251,7 @@ class HerderImpl : public Herder
     ClassicTransactionQueue mTransactionQueue;
     std::unique_ptr<SorobanTransactionQueue> mSorobanTransactionQueue;
 
-    void updateTransactionQueue(TxSetFrameConstPtr txSet);
+    void updateTransactionQueue(TxSetXDRFrameConstPtr txSet);
     void maybeSetupSorobanQueue(uint32_t protocolVersion);
 
     PendingEnvelopes mPendingEnvelopes;
@@ -261,6 +277,11 @@ class HerderImpl : public Herder
     void persistSCPState(uint64 slot);
     // restores SCP state based on the last messages saved on disk
     void restoreSCPState();
+
+    // Map SCP slots to local time of nomination and the time slot was
+    // externalized by the network
+    std::map<uint32_t, std::pair<uint64_t, std::optional<uint64_t>>>
+        mDriftCTSlidingWindow;
 
     // saves upgrade parameters
     void persistUpgrades();

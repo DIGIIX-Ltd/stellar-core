@@ -1,9 +1,7 @@
 #include "overlay/OverlayMetrics.h"
 #include "main/Application.h"
 
-#include "medida/meter.h"
 #include "medida/metrics_registry.h"
-#include "medida/timer.h"
 
 namespace stellar
 {
@@ -32,6 +30,10 @@ OverlayMetrics::OverlayMetrics(Application& app)
           {"overlay", "timeout", "straggler"}, "timeout"))
     , mConnectionLatencyTimer(
           app.getMetrics().NewTimer({"overlay", "connection", "latency"}))
+    , mConnectionReadThrottle(
+          app.getMetrics().NewTimer({"overlay", "connection", "read-throttle"}))
+    , mConnectionFloodThrottle(app.getMetrics().NewTimer(
+          {"overlay", "connection", "flood-throttle"}))
 
     , mItemFetcherNextPeer(app.getMetrics().NewMeter(
           {"overlay", "item-fetcher", "next-peer"}, "item-fetcher"))
@@ -41,8 +43,6 @@ OverlayMetrics::OverlayMetrics(Application& app)
     , mRecvAuthTimer(app.getMetrics().NewTimer({"overlay", "recv", "auth"}))
     , mRecvDontHaveTimer(
           app.getMetrics().NewTimer({"overlay", "recv", "dont-have"}))
-    , mRecvGetPeersTimer(
-          app.getMetrics().NewTimer({"overlay", "recv", "get-peers"}))
     , mRecvPeersTimer(app.getMetrics().NewTimer({"overlay", "recv", "peers"}))
     , mRecvGetTxSetTimer(
           app.getMetrics().NewTimer({"overlay", "recv", "get-txset"}))
@@ -73,6 +73,10 @@ OverlayMetrics::OverlayMetrics(Application& app)
           app.getMetrics().NewTimer({"overlay", "recv", "survey-request"}))
     , mRecvSurveyResponseTimer(
           app.getMetrics().NewTimer({"overlay", "recv", "survey-response"}))
+    , mRecvStartSurveyCollectingTimer(app.getMetrics().NewTimer(
+          {"overlay", "recv", "start-survey-collecting"}))
+    , mRecvStopSurveyCollectingTimer(app.getMetrics().NewTimer(
+          {"overlay", "recv", "stop-survey-collecting"}))
 
     , mRecvFloodAdvertTimer(
           app.getMetrics().NewTimer({"overlay", "recv", "flood-advert"}))
@@ -108,8 +112,6 @@ OverlayMetrics::OverlayMetrics(Application& app)
           app.getMetrics().NewMeter({"overlay", "send", "auth"}, "message"))
     , mSendDontHaveMeter(app.getMetrics().NewMeter(
           {"overlay", "send", "dont-have"}, "message"))
-    , mSendGetPeersMeter(app.getMetrics().NewMeter(
-          {"overlay", "send", "get-peers"}, "message"))
     , mSendPeersMeter(
           app.getMetrics().NewMeter({"overlay", "send", "peers"}, "message"))
     , mSendGetTxSetMeter(app.getMetrics().NewMeter(
@@ -132,6 +134,10 @@ OverlayMetrics::OverlayMetrics(Application& app)
           {"overlay", "send", "survey-request"}, "message"))
     , mSendSurveyResponseMeter(app.getMetrics().NewMeter(
           {"overlay", "send", "survey-response"}, "message"))
+    , mSendStartSurveyCollectingMeter(app.getMetrics().NewMeter(
+          {"overlay", "send", "start-survey-collecting"}, "message"))
+    , mSendStopSurveyCollectingMeter(app.getMetrics().NewMeter(
+          {"overlay", "send", "stop-survey-collecting"}, "message"))
     , mSendFloodAdvertMeter(app.getMetrics().NewMeter(
           {"overlay", "send", "flood-advert"}, "message"))
     , mSendFloodDemandMeter(app.getMetrics().NewMeter(

@@ -5,16 +5,16 @@
 #include "IndexBucketsWork.h"
 #include "bucket/BucketIndex.h"
 #include "bucket/BucketManager.h"
-#include "util/HashOfHash.h"
+#include "bucket/LiveBucket.h"
+#include "util/Fs.h"
+#include "util/Logging.h"
 #include "util/UnorderedSet.h"
-#include "util/types.h"
-#include "work/WorkWithCallback.h"
 #include <Tracy.hpp>
 
 namespace stellar
 {
 IndexBucketsWork::IndexWork::IndexWork(Application& app,
-                                       std::shared_ptr<Bucket> b)
+                                       std::shared_ptr<LiveBucket> b)
     : BasicWork(app, "index-work", BasicWork::RETRY_NEVER), mBucket(b)
 {
 }
@@ -22,13 +22,12 @@ IndexBucketsWork::IndexWork::IndexWork(Application& app,
 BasicWork::State
 IndexBucketsWork::IndexWork::onRun()
 {
-    if (mDone)
+    if (mState == State::WORK_WAITING)
     {
-        return State::WORK_SUCCESS;
+        postWork();
     }
 
-    postWork();
-    return State::WORK_WAITING;
+    return mState;
 }
 
 bool
@@ -38,14 +37,21 @@ IndexBucketsWork::IndexWork::onAbort()
 };
 
 void
+IndexBucketsWork::IndexWork::onReset()
+{
+    mState = BasicWork::State::WORK_WAITING;
+}
+
+void
 IndexBucketsWork::IndexWork::postWork()
 {
     Application& app = this->mApp;
+    asio::io_context& ctx = app.getWorkerIOContext();
 
     std::weak_ptr<IndexWork> weak(
         std::static_pointer_cast<IndexWork>(shared_from_this()));
     app.postOnBackgroundThread(
-        [&app, weak]() {
+        [&app, &ctx, weak]() {
             auto self = weak.lock();
             if (!self || self->isAborting())
             {
@@ -56,18 +62,19 @@ IndexBucketsWork::IndexWork::postWork()
             auto indexFilename =
                 bm.bucketIndexFilename(self->mBucket->getHash());
 
-            if (bm.getConfig().isPersistingBucketListDBIndexes() &&
+            if (bm.getConfig().BUCKETLIST_DB_PERSIST_INDEX &&
                 fs::exists(indexFilename))
             {
                 self->mIndex = BucketIndex::load(bm, indexFilename,
                                                  self->mBucket->getSize());
 
                 // If we could not load the index from the file, file is out of
-                // date and will be overwritten when we create a new index
+                // date. Delete and create a new index.
                 if (!self->mIndex)
                 {
                     CLOG_WARNING(Bucket, "Outdated index file: {}",
                                  indexFilename);
+                    std::remove(indexFilename.c_str());
                 }
                 else
                 {
@@ -78,8 +85,10 @@ IndexBucketsWork::IndexWork::postWork()
 
             if (!self->mIndex)
             {
-                self->mIndex = BucketIndex::createIndex(
-                    bm, self->mBucket->getFilename(), self->mBucket->getHash());
+                // TODO: Fix this when archive BucketLists assume state
+                self->mIndex = BucketIndex::createIndex<LiveBucket>(
+                    bm, self->mBucket->getFilename(), self->mBucket->getHash(),
+                    ctx);
             }
 
             app.postOnMainThread(
@@ -87,11 +96,18 @@ IndexBucketsWork::IndexWork::postWork()
                     auto self = weak.lock();
                     if (self)
                     {
-                        self->mDone = true;
-                        if (!self->isAborting())
+                        if (self->mIndex)
                         {
-                            self->mApp.getBucketManager().maybeSetIndex(
-                                self->mBucket, std::move(self->mIndex));
+                            self->mState = BasicWork::State::WORK_SUCCESS;
+                            if (!self->isAborting())
+                            {
+                                self->mApp.getBucketManager().maybeSetIndex(
+                                    self->mBucket, std::move(self->mIndex));
+                            }
+                        }
+                        else
+                        {
+                            self->mState = BasicWork::State::WORK_FAILURE;
                         }
                         self->wakeUp();
                     }
@@ -102,7 +118,7 @@ IndexBucketsWork::IndexWork::postWork()
 }
 
 IndexBucketsWork::IndexBucketsWork(
-    Application& app, std::vector<std::shared_ptr<Bucket>> const& buckets)
+    Application& app, std::vector<std::shared_ptr<LiveBucket>> const& buckets)
     : Work(app, "index-bucketList", BasicWork::RETRY_NEVER), mBuckets(buckets)
 {
 }
@@ -128,7 +144,7 @@ void
 IndexBucketsWork::spawnWork()
 {
     UnorderedSet<Hash> indexedBuckets;
-    auto spawnIndexWork = [&](std::shared_ptr<Bucket> const& b) {
+    auto spawnIndexWork = [&](std::shared_ptr<LiveBucket> const& b) {
         // Don't index empty bucket or buckets that are already being
         // indexed. Sometimes one level's snap bucket may be another
         // level's future bucket. The indexing job may have started but

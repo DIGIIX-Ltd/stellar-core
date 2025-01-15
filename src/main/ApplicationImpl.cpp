@@ -14,16 +14,15 @@
 // first to include <windows.h> -- so we try to include it before everything
 // else.
 #include "util/asio.h"
-#include "bucket/Bucket.h"
 #include "bucket/BucketManager.h"
 #include "catchup/ApplyBucketsWork.h"
+#include "crypto/Hex.h"
 #include "crypto/SHA.h"
 #include "crypto/SecretKey.h"
 #include "database/Database.h"
 #include "herder/Herder.h"
 #include "herder/HerderPersistence.h"
 #include "history/HistoryArchiveManager.h"
-#include "history/HistoryArchiveReportWork.h"
 #include "history/HistoryManager.h"
 #include "invariant/AccountSubEntriesCountIsValid.h"
 #include "invariant/BucketListIsConsistentWithDatabase.h"
@@ -33,14 +32,12 @@
 #include "invariant/LedgerEntryIsValid.h"
 #include "invariant/LiabilitiesMatchOffers.h"
 #include "invariant/SponsorshipCountIsValid.h"
-#include "ledger/InMemoryLedgerTxn.h"
-#include "ledger/InMemoryLedgerTxnRoot.h"
 #include "ledger/LedgerHeaderUtils.h"
 #include "ledger/LedgerManager.h"
 #include "ledger/LedgerTxn.h"
+#include "main/AppConnector.h"
 #include "main/ApplicationUtils.h"
 #include "main/CommandHandler.h"
-#include "main/ExternalQueue.h"
 #include "main/Maintainer.h"
 #include "main/StellarCoreVersion.h"
 #include "medida/counter.h"
@@ -52,8 +49,6 @@
 #include "overlay/OverlayManager.h"
 #include "overlay/OverlayManagerImpl.h"
 #include "process/ProcessManager.h"
-#include "scp/LocalNode.h"
-#include "scp/QuorumSetUtils.h"
 #include "util/GlobalChecks.h"
 #include "util/LogSlowExecution.h"
 #include "util/Logging.h"
@@ -64,6 +59,8 @@
 #include "work/WorkScheduler.h"
 
 #ifdef BUILD_TESTS
+#include "ledger/test/InMemoryLedgerTxn.h"
+#include "ledger/test/InMemoryLedgerTxnRoot.h"
 #include "simulation/LoadGenerator.h"
 #endif
 
@@ -81,9 +78,29 @@ namespace stellar
 ApplicationImpl::ApplicationImpl(VirtualClock& clock, Config const& cfg)
     : mVirtualClock(clock)
     , mConfig(cfg)
-    , mWorkerIOContext(mConfig.WORKER_THREADS)
+    // Allocate one worker to eviction when background eviction enabled
+    , mWorkerIOContext(mConfig.WORKER_THREADS - 1)
+    , mEvictionIOContext(std::make_unique<asio::io_context>(1))
     , mWork(std::make_unique<asio::io_context::work>(mWorkerIOContext))
+    , mEvictionWork(
+          mEvictionIOContext
+              ? std::make_unique<asio::io_context::work>(*mEvictionIOContext)
+              : nullptr)
+    , mOverlayIOContext(mConfig.BACKGROUND_OVERLAY_PROCESSING
+                            ? std::make_unique<asio::io_context>(1)
+                            : nullptr)
+    , mOverlayWork(mOverlayIOContext ? std::make_unique<asio::io_context::work>(
+                                           *mOverlayIOContext)
+                                     : nullptr)
+    , mLedgerCloseIOContext(mConfig.parallelLedgerClose()
+                                ? std::make_unique<asio::io_context>(1)
+                                : nullptr)
+    , mLedgerCloseWork(
+          mLedgerCloseIOContext
+              ? std::make_unique<asio::io_context::work>(*mLedgerCloseIOContext)
+              : nullptr)
     , mWorkerThreads()
+    , mEvictionThread()
     , mStopSignals(clock.getIOContext(), SIGINT)
     , mStarted(false)
     , mStopping(false)
@@ -95,6 +112,10 @@ ApplicationImpl::ApplicationImpl(VirtualClock& clock, Config const& cfg)
           mMetrics->NewTimer({"app", "post-on-main-thread", "delay"}))
     , mPostOnBackgroundThreadDelay(
           mMetrics->NewTimer({"app", "post-on-background-thread", "delay"}))
+    , mPostOnOverlayThreadDelay(
+          mMetrics->NewTimer({"app", "post-on-overlay-thread", "delay"}))
+    , mPostOnLedgerCloseThreadDelay(
+          mMetrics->NewTimer({"app", "post-on-ledger-close-thread", "delay"}))
     , mStartedOn(clock.system_now())
 {
 #ifdef SIGQUIT
@@ -135,6 +156,18 @@ ApplicationImpl::ApplicationImpl(VirtualClock& clock, Config const& cfg)
 
     auto t = mConfig.WORKER_THREADS;
     LOG_DEBUG(DEFAULT_LOG, "Application constructing (worker threads: {})", t);
+
+    releaseAssert(mConfig.WORKER_THREADS > 0);
+    releaseAssert(mEvictionIOContext);
+
+    // Allocate one thread for Eviction scan
+    mEvictionThread = std::thread{[this]() {
+        runCurrentThreadWithMediumPriority();
+        mEvictionIOContext->run();
+    }};
+
+    --t;
+
     while (t--)
     {
         auto thread = std::thread{[this]() {
@@ -143,96 +176,31 @@ ApplicationImpl::ApplicationImpl(VirtualClock& clock, Config const& cfg)
         }};
         mWorkerThreads.emplace_back(std::move(thread));
     }
+
+    if (mConfig.BACKGROUND_OVERLAY_PROCESSING)
+    {
+        // Keep priority unchanged as overlay processes time-sensitive tasks
+        mOverlayThread = std::thread{[this]() { mOverlayIOContext->run(); }};
+    }
+
+    if (mConfig.parallelLedgerClose())
+    {
+        mLedgerCloseThread =
+            std::thread{[this]() { mLedgerCloseIOContext->run(); }};
+    }
 }
 
 static void
 maybeRebuildLedger(Application& app, bool applyBuckets)
 {
-    std::set<LedgerEntryType> toDrop;
-    std::set<LedgerEntryType> toRebuild;
     auto& ps = app.getPersistentState();
-    auto bucketListDBEnabled = app.getConfig().isUsingBucketListDB();
-    for (auto let : xdr::xdr_traits<LedgerEntryType>::enum_values())
-    {
-        LedgerEntryType t = static_cast<LedgerEntryType>(let);
-        if (ps.shouldRebuildForType(t))
-        {
-            toRebuild.emplace(t);
-            continue;
-        }
-
-        // If bucketlist is enabled, drop all tables except for offers
-        if (let != OFFER && bucketListDBEnabled)
-        {
-            toDrop.emplace(t);
-        }
-    }
-
-    if (!app.getConfig().MODE_USES_IN_MEMORY_LEDGER)
+    if (ps.shouldRebuildForOfferTable())
     {
         app.getDatabase().clearPreparedStatementCache();
-        soci::transaction tx(app.getDatabase().getSession());
-
-        auto loopEntries = [&](auto const& entryTypeSet, bool shouldRebuild) {
-            for (auto let : entryTypeSet)
-            {
-                switch (let)
-                {
-                case ACCOUNT:
-                    LOG_INFO(DEFAULT_LOG, "Dropping accounts");
-                    app.getLedgerTxnRoot().dropAccounts(shouldRebuild);
-                    break;
-                case TRUSTLINE:
-                    LOG_INFO(DEFAULT_LOG, "Dropping trustlines");
-                    app.getLedgerTxnRoot().dropTrustLines(shouldRebuild);
-                    break;
-                case OFFER:
-                    LOG_INFO(DEFAULT_LOG, "Dropping offers");
-                    app.getLedgerTxnRoot().dropOffers(shouldRebuild);
-                    break;
-                case DATA:
-                    LOG_INFO(DEFAULT_LOG, "Dropping accountdata");
-                    app.getLedgerTxnRoot().dropData(shouldRebuild);
-                    break;
-                case CLAIMABLE_BALANCE:
-                    LOG_INFO(DEFAULT_LOG, "Dropping claimablebalances");
-                    app.getLedgerTxnRoot().dropClaimableBalances(shouldRebuild);
-                    break;
-                case LIQUIDITY_POOL:
-                    LOG_INFO(DEFAULT_LOG, "Dropping liquiditypools");
-                    app.getLedgerTxnRoot().dropLiquidityPools(shouldRebuild);
-                    break;
-                case CONTRACT_DATA:
-                    LOG_INFO(DEFAULT_LOG, "Dropping contractdata");
-                    app.getLedgerTxnRoot().dropContractData(shouldRebuild);
-                    break;
-                case CONTRACT_CODE:
-                    LOG_INFO(DEFAULT_LOG, "Dropping contractcode");
-                    app.getLedgerTxnRoot().dropContractCode(shouldRebuild);
-                    break;
-                case CONFIG_SETTING:
-                    LOG_INFO(DEFAULT_LOG, "Dropping configsettings");
-                    app.getLedgerTxnRoot().dropConfigSettings(shouldRebuild);
-                    break;
-                case TTL:
-                    LOG_INFO(DEFAULT_LOG, "Dropping ttl");
-                    app.getLedgerTxnRoot().dropTTL(shouldRebuild);
-                    break;
-                default:
-                    abort();
-                }
-            }
-        };
-
-        loopEntries(toRebuild, true);
-        loopEntries(toDrop, false);
+        soci::transaction tx(app.getDatabase().getRawSession());
+        LOG_INFO(DEFAULT_LOG, "Dropping offers");
+        app.getLedgerTxnRoot().dropOffers();
         tx.commit();
-
-        // Nothing to apply, exit early
-        if (toRebuild.empty())
-        {
-            return;
-        }
 
         // No transaction is needed. ApplyBucketsWork breaks the apply into many
         // small chunks, each of which has its own transaction. If it fails at
@@ -242,21 +210,16 @@ maybeRebuildLedger(Application& app, bool applyBuckets)
         {
             LOG_INFO(DEFAULT_LOG,
                      "Rebuilding ledger tables by applying buckets");
-            auto filter = [&toRebuild](LedgerEntryType t) {
-                return toRebuild.find(t) != toRebuild.end();
-            };
-            if (!applyBucketsForLCL(app, filter))
+            if (!applyBucketsForLCL(app))
             {
                 throw std::runtime_error("Could not rebuild ledger tables");
             }
             LOG_INFO(DEFAULT_LOG, "Successfully rebuilt ledger tables");
         }
+        LOG_INFO(DEFAULT_LOG, "Successfully rebuilt ledger tables");
     }
 
-    for (auto let : toRebuild)
-    {
-        ps.clearRebuildForType(let);
-    }
+    ps.clearRebuildForOfferTable();
 }
 
 void
@@ -280,7 +243,7 @@ ApplicationImpl::initialize(bool createNewDB, bool forceRebuild)
     mLedgerManager = createLedgerManager();
     mHerder = createHerder();
     mHerderPersistence = HerderPersistence::create(*this);
-    mCatchupManager = CatchupManager::create(*this);
+    mLedgerApplyManager = LedgerApplyManager::create(*this);
     mHistoryArchiveManager = std::make_unique<HistoryArchiveManager>(*this);
     mHistoryManager = HistoryManager::create(*this);
     mInvariantManager = createInvariantManager();
@@ -288,31 +251,31 @@ ApplicationImpl::initialize(bool createNewDB, bool forceRebuild)
     mWorkScheduler = WorkScheduler::create(*this);
     mBanManager = BanManager::create(*this);
     mStatusManager = std::make_unique<StatusManager>();
+    mAppConnector = std::make_unique<AppConnector>(*this);
 
+    if (mConfig.ENTRY_CACHE_SIZE < 20000)
+    {
+        LOG_WARNING(DEFAULT_LOG,
+                    "ENTRY_CACHE_SIZE({}) is below the recommended minimum "
+                    "of 20000",
+                    mConfig.ENTRY_CACHE_SIZE);
+    }
+    mLedgerTxnRoot = std::make_unique<LedgerTxnRoot>(
+        *this, mConfig.ENTRY_CACHE_SIZE, mConfig.PREFETCH_BATCH_SIZE
+#ifdef BEST_OFFER_DEBUGGING
+        ,
+        mConfig.BEST_OFFER_DEBUGGING_ENABLED
+#endif
+    );
+
+#ifdef BUILD_TESTS
     if (getConfig().MODE_USES_IN_MEMORY_LEDGER)
     {
         resetLedgerState();
     }
-    else
-    {
-        if (mConfig.ENTRY_CACHE_SIZE < 20000)
-        {
-            LOG_WARNING(DEFAULT_LOG,
-                        "ENTRY_CACHE_SIZE({}) is below the recommended minimum "
-                        "of 20000",
-                        mConfig.ENTRY_CACHE_SIZE);
-        }
-        mLedgerTxnRoot = std::make_unique<LedgerTxnRoot>(
-            *this, mConfig.ENTRY_CACHE_SIZE, mConfig.PREFETCH_BATCH_SIZE
-#ifdef BEST_OFFER_DEBUGGING
-            ,
-            mConfig.BEST_OFFER_DEBUGGING_ENABLED
 #endif
-        );
 
-        BucketListIsConsistentWithDatabase::registerInvariant(*this);
-    }
-
+    BucketListIsConsistentWithDatabase::registerInvariant(*this);
     AccountSubEntriesCountIsValid::registerInvariant(*this);
     ConservationOfLumens::registerInvariant(*this);
     LedgerEntryIsValid::registerInvariant(*this);
@@ -344,6 +307,7 @@ ApplicationImpl::initialize(bool createNewDB, bool forceRebuild)
 void
 ApplicationImpl::resetLedgerState()
 {
+#ifdef BUILD_TESTS
     if (getConfig().MODE_USES_IN_MEMORY_LEDGER)
     {
         mNeverCommittingLedgerTxn.reset();
@@ -353,12 +317,13 @@ ApplicationImpl::resetLedgerState()
 #endif
         );
         mNeverCommittingLedgerTxn = std::make_unique<InMemoryLedgerTxn>(
-            *mInMemoryLedgerTxnRoot, getDatabase());
+            *mInMemoryLedgerTxnRoot, getDatabase(), *mLedgerTxnRoot);
     }
     else
+#endif
     {
         auto& lsRoot = getLedgerTxnRoot();
-        lsRoot.deleteObjectsModifiedOnOrAfterLedger(0);
+        lsRoot.deleteOffersModifiedOnOrAfterLedger(0);
     }
 }
 
@@ -377,10 +342,7 @@ ApplicationImpl::upgradeToCurrentSchemaAndMaybeRebuildLedger(bool applyBuckets,
     if (forceRebuild)
     {
         auto& ps = getPersistentState();
-        for (auto let : xdr::xdr_traits<LedgerEntryType>::enum_values())
-        {
-            ps.setRebuildForType(static_cast<LedgerEntryType>(let));
-        }
+        ps.setRebuildForOfferTable();
     }
 
     mDatabase->upgradeToCurrentSchema();
@@ -471,8 +433,7 @@ ApplicationImpl::getJsonInfo(bool verbose)
     info["ledger"]["baseFee"] = lcl.header.baseFee;
     info["ledger"]["baseReserve"] = lcl.header.baseReserve;
     info["ledger"]["maxTxSetSize"] = lcl.header.maxTxSetSize;
-    if (protocolVersionStartsFrom(lcl.header.ledgerVersion,
-                                  SOROBAN_PROTOCOL_VERSION))
+    if (lm.hasSorobanNetworkConfig())
     {
         info["ledger"]["maxSorobanTxSetSize"] =
             static_cast<Json::Int64>(lm.maxLedgerResources(/* isSoroban */ true)
@@ -551,13 +512,7 @@ ApplicationImpl::getJsonInfo(bool verbose)
 void
 ApplicationImpl::reportInfo(bool verbose)
 {
-    mLedgerManager->loadLastKnownLedger(nullptr);
-    LedgerTxn ltx(getLedgerTxnRoot());
-    if (protocolVersionStartsFrom(ltx.loadHeader().current().ledgerVersion,
-                                  SOROBAN_PROTOCOL_VERSION))
-    {
-        getLedgerManager().updateNetworkConfig(ltx);
-    }
+    mLedgerManager->loadLastKnownLedger(/* restoreBucketlist */ false);
     LOG_INFO(DEFAULT_LOG, "Reporting application info");
     std::cout << getJsonInfo(verbose).toStyledString() << std::endl;
 }
@@ -596,10 +551,11 @@ ApplicationImpl::scheduleSelfCheck(bool waitUntilNextCheckpoint)
     {
         // Delay until a second full checkpoint-period after the next checkpoint
         // publication. The captured lhhe should usually be published by then.
-        auto& hm = getHistoryManager();
         auto targetLedger =
-            hm.firstLedgerAfterCheckpointContaining(lhhe.header.ledgerSeq);
-        targetLedger = hm.firstLedgerAfterCheckpointContaining(targetLedger);
+            HistoryManager::firstLedgerAfterCheckpointContaining(
+                lhhe.header.ledgerSeq, getConfig());
+        targetLedger = HistoryManager::firstLedgerAfterCheckpointContaining(
+            targetLedger, getConfig());
         auto cond = [targetLedger](Application& app) -> bool {
             auto& lm = app.getLedgerManager();
             return lm.getLastClosedLedgerNum() > targetLedger;
@@ -631,8 +587,13 @@ ApplicationImpl::getNetworkID() const
 ApplicationImpl::~ApplicationImpl()
 {
     LOG_INFO(DEFAULT_LOG, "Application destructing");
+    mStopping = true;
     try
     {
+        // First, shutdown ledger close queue _before_ shutting down all the
+        // subsystems. This ensures that any ledger currently being closed
+        // finishes okay
+        shutdownLedgerCloseThread();
         shutdownWorkScheduler();
         if (mProcessManager)
         {
@@ -641,6 +602,12 @@ ApplicationImpl::~ApplicationImpl()
         if (mBucketManager)
         {
             mBucketManager->shutdown();
+        }
+        // Peers continue reading and writing in the background, so we need to
+        // issue a signal to start wrapping up
+        if (mOverlayManager)
+        {
+            mOverlayManager->shutdown();
         }
     }
     catch (std::exception const& e)
@@ -652,18 +619,6 @@ ApplicationImpl::~ApplicationImpl()
     shutdownMainIOContext();
     joinAllThreads();
     LOG_INFO(DEFAULT_LOG, "Application destroyed");
-}
-
-void
-ApplicationImpl::resetDBForInMemoryMode()
-{
-    // Load the peer information and reinitialize the DB
-    auto& pm = getOverlayManager().getPeerManager();
-    auto peerData = pm.loadAllPeers();
-    newDB();
-    pm.storePeers(peerData);
-
-    LOG_INFO(DEFAULT_LOG, "In-memory state is reset back to genesis");
 }
 
 uint64_t
@@ -698,82 +653,71 @@ ApplicationImpl::validateAndLogConfig()
             "RUN_STANDALONE is not set");
     }
 
-    // EXPERIMENTAL_PRECAUTION_DELAY_META is only meaningful when there's a
-    // METADATA_OUTPUT_STREAM.  We only allow EXPERIMENTAL_PRECAUTION_DELAY_META
-    // on a captive core, without a persistent database; old-style ingestion
-    // which reads from the core database could do the delaying itself.
-    if (mConfig.METADATA_OUTPUT_STREAM != "" &&
-        mConfig.EXPERIMENTAL_PRECAUTION_DELAY_META && !mConfig.isInMemoryMode())
+    if (!mDatabase->isSqlite())
     {
-        throw std::invalid_argument(
-            "Using a METADATA_OUTPUT_STREAM with "
-            "EXPERIMENTAL_PRECAUTION_DELAY_META set to true "
-            "requires --in-memory");
+        CLOG_WARNING(Database,
+                     "Non-sqlite3 database detected. Support for other sql "
+                     "backends is deprecated and will be removed in a future "
+                     "release. Please use sqlite3 for non-ledger state data.");
     }
 
-    if (mConfig.EXPERIMENTAL_BUCKETLIST_DB)
+    auto pageSizeExp = mConfig.BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT;
+
+    // If the page size is less than 256 bytes, it is essentially
+    // indexing individual keys, so page size should be set to 0
+    // instead.
+    static auto const pageSizeMinExponent = 8;
+
+    // Any exponent above 31 will cause overflow
+    static auto const pageSizeMaxExponent = 31;
+
+    if (pageSizeExp != 0)
     {
-        if (mConfig.isUsingBucketListDB())
+        if (pageSizeExp < pageSizeMinExponent)
         {
-            mPersistentState->setState(PersistentState::kDBBackend,
-                                       BucketIndex::DB_BACKEND_STATE);
-            auto pageSizeExp =
-                mConfig.EXPERIMENTAL_BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT;
-            if (pageSizeExp != 0)
-            {
-                // If the page size is less than 256 bytes, it is essentially
-                // indexing individual keys, so page size should be set to 0
-                // instead.
-                if (pageSizeExp < 8)
-                {
-                    throw std::invalid_argument(
-                        "EXPERIMENTAL_BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT "
-                        "must be at least 8 or set to 0 for individual entry "
-                        "indexing");
-                }
-
-                // Check if pageSize will cause overflow
-                if (pageSizeExp > 31)
-                {
-                    throw std::invalid_argument(
-                        "EXPERIMENTAL_BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT "
-                        "must be less than 32");
-                }
-            }
-
-            CLOG_INFO(Bucket,
-                      "BucketListDB enabled: pageSizeExponent: {} indexCutOff: "
-                      "{}MB, persist indexes: {}",
-                      pageSizeExp,
-                      mConfig.EXPERIMENTAL_BUCKETLIST_DB_INDEX_CUTOFF,
-                      mConfig.isPersistingBucketListDBIndexes());
+            throw std::invalid_argument(
+                "BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT "
+                "must be at least 8 or set to 0 for individual entry "
+                "indexing");
         }
-        else
+
+        if (pageSizeExp > pageSizeMaxExponent)
         {
-            CLOG_WARNING(
-                Bucket,
-                "EXPERIMENTAL_BUCKETLIST_DB flag set but "
-                "BucketListDB not enabled. To enable BucketListDB, "
-                "MODE_ENABLES_BUCKETLIST must be set and --in-memory flag "
-                "must not be used.");
+            throw std::invalid_argument(
+                "BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT "
+                "must be less than 32");
         }
     }
-    else if (mPersistentState->getState(PersistentState::kDBBackend) ==
-             BucketIndex::DB_BACKEND_STATE)
+
+    CLOG_INFO(Bucket,
+              "BucketListDB enabled: pageSizeExponent: {} indexCutOff: "
+              "{}MB, persist indexes: {}",
+              pageSizeExp, mConfig.BUCKETLIST_DB_INDEX_CUTOFF,
+              mConfig.BUCKETLIST_DB_PERSIST_INDEX);
+
+    if (mConfig.HTTP_QUERY_PORT != 0)
     {
-        throw std::invalid_argument(
-            "To downgrade from EXPERIMENTAL_BUCKETLIST_DB, run "
-            "stellar-core new-db.");
+        if (isNetworkedValidator)
+        {
+            throw std::invalid_argument("HTTP_QUERY_PORT is non-zero, "
+                                        "NODE_IS_VALIDATOR is set, and "
+                                        "RUN_STANDALONE is not set");
+        }
+
+        if (mConfig.HTTP_QUERY_PORT == mConfig.HTTP_PORT)
+        {
+            throw std::invalid_argument(
+                "HTTP_QUERY_PORT must be different from HTTP_PORT");
+        }
+
+        if (mConfig.QUERY_THREAD_POOL_SIZE == 0)
+        {
+            throw std::invalid_argument(
+                "HTTP_QUERY_PORT requires QUERY_THREAD_POOL_SIZE > 0");
+        }
     }
 
-    if (isNetworkedValidator && mConfig.isInMemoryMode())
-    {
-        throw std::invalid_argument(
-            "In-memory mode is set, NODE_IS_VALIDATOR is set, "
-            "and RUN_STANDALONE is not set");
-    }
-
-    if (getHistoryArchiveManager().hasAnyWritableHistoryArchive())
+    if (getHistoryArchiveManager().publishEnabled())
     {
         if (!mConfig.modeStoresAllHistory())
         {
@@ -792,6 +736,41 @@ ApplicationImpl::validateAndLogConfig()
 }
 
 void
+ApplicationImpl::startServices()
+{
+    // restores Herder's state before starting overlay
+    mHerder->start();
+    mMaintainer->start();
+    if (mConfig.MODE_AUTO_STARTS_OVERLAY)
+    {
+        mOverlayManager->start();
+    }
+    auto npub = mHistoryManager->publishQueuedHistory();
+    if (npub != 0)
+    {
+        CLOG_INFO(Ledger, "Restarted publishing {} queued snapshots", npub);
+    }
+    if (mConfig.FORCE_SCP)
+    {
+        LOG_INFO(DEFAULT_LOG, "* ");
+        LOG_INFO(DEFAULT_LOG,
+                 "* Force-starting scp from the current db state.");
+        LOG_INFO(DEFAULT_LOG, "* ");
+
+        mHerder->bootstrap();
+    }
+    if (mConfig.AUTOMATIC_SELF_CHECK_PERIOD.count() != 0)
+    {
+        scheduleSelfCheck(true);
+    }
+
+    if (mConfig.TESTING_UPGRADE_DATETIME.time_since_epoch().count() != 0)
+    {
+        mHerder->setUpgrades(mConfig);
+    }
+}
+
+void
 ApplicationImpl::start()
 {
     if (mStarted)
@@ -799,60 +778,12 @@ ApplicationImpl::start()
         CLOG_INFO(Ledger, "Skipping application start up");
         return;
     }
+
     CLOG_INFO(Ledger, "Starting up application");
     mStarted = true;
 
-    if (mConfig.TESTING_UPGRADE_DATETIME.time_since_epoch().count() != 0)
-    {
-        mHerder->setUpgrades(mConfig);
-    }
-
-    bool done = false;
-    mLedgerManager->loadLastKnownLedger([this, &done]() {
-        // Make sure to load Soroban network config before
-        // herder starts (tx queue configuration is based on it).
-        {
-            LedgerTxn ltx(getLedgerTxnRoot());
-            if (protocolVersionStartsFrom(
-                    ltx.loadHeader().current().ledgerVersion,
-                    SOROBAN_PROTOCOL_VERSION))
-            {
-                getLedgerManager().updateNetworkConfig(ltx);
-            }
-        }
-        // restores Herder's state before starting overlay
-        mHerder->start();
-        // set known cursors before starting maintenance job
-        ExternalQueue ps(*this);
-        ps.setInitialCursors(mConfig.KNOWN_CURSORS);
-        mMaintainer->start();
-        if (mConfig.MODE_AUTO_STARTS_OVERLAY)
-        {
-            mOverlayManager->start();
-        }
-        auto npub = mHistoryManager->publishQueuedHistory();
-        if (npub != 0)
-        {
-            CLOG_INFO(Ledger, "Restarted publishing {} queued snapshots", npub);
-        }
-        if (mConfig.FORCE_SCP)
-        {
-            LOG_INFO(DEFAULT_LOG, "* ");
-            LOG_INFO(DEFAULT_LOG,
-                     "* Force-starting scp from the current db state.");
-            LOG_INFO(DEFAULT_LOG, "* ");
-
-            mHerder->bootstrap();
-        }
-        if (mConfig.AUTOMATIC_SELF_CHECK_PERIOD.count() != 0)
-        {
-            scheduleSelfCheck(true);
-        }
-        done = true;
-    });
-
-    while (!done && mVirtualClock.crank(true))
-        ;
+    mLedgerManager->loadLastKnownLedger(/* restoreBucketlist */ true);
+    startServices();
 }
 
 void
@@ -863,6 +794,7 @@ ApplicationImpl::gracefulStop()
         return;
     }
     mStopping = true;
+    shutdownLedgerCloseThread();
     if (mOverlayManager)
     {
         mOverlayManager->shutdown();
@@ -878,7 +810,8 @@ ApplicationImpl::gracefulStop()
         // This call happens in shutdown -- before destruction -- so that we can
         // be sure other subsystems (ledger etc.) are still alive and we can
         // call into them to figure out which buckets _are_ referenced.
-        mBucketManager->forgetUnreferencedBuckets();
+        mBucketManager->forgetUnreferencedBuckets(
+            mLedgerManager->getLastClosedLedgerHAS());
         mBucketManager->shutdown();
     }
     if (mHerder)
@@ -910,6 +843,21 @@ ApplicationImpl::shutdownWorkScheduler()
 }
 
 void
+ApplicationImpl::shutdownLedgerCloseThread()
+{
+    if (mLedgerCloseThread && !mLedgerCloseThreadStopped)
+    {
+        if (mLedgerCloseWork)
+        {
+            mLedgerCloseWork.reset();
+        }
+        LOG_INFO(DEFAULT_LOG, "Joining the ledger close thread");
+        mLedgerCloseThread->join();
+        mLedgerCloseThreadStopped = true;
+    }
+}
+
+void
 ApplicationImpl::joinAllThreads()
 {
     // We never strictly stop the worker IO service, just release the work-lock
@@ -919,19 +867,41 @@ ApplicationImpl::joinAllThreads()
     {
         mWork.reset();
     }
-    LOG_DEBUG(DEFAULT_LOG, "Joining {} worker threads", mWorkerThreads.size());
+    if (mOverlayWork)
+    {
+        mOverlayWork.reset();
+    }
+    if (mEvictionWork)
+    {
+        mEvictionWork.reset();
+    }
+
+    LOG_INFO(DEFAULT_LOG, "Joining {} worker threads", mWorkerThreads.size());
     for (auto& w : mWorkerThreads)
     {
         w.join();
     }
-    LOG_DEBUG(DEFAULT_LOG, "Joined all {} threads", mWorkerThreads.size());
+
+    if (mOverlayThread)
+    {
+        LOG_INFO(DEFAULT_LOG, "Joining the overlay thread");
+        mOverlayThread->join();
+    }
+
+    if (mEvictionThread)
+    {
+        LOG_INFO(DEFAULT_LOG, "Joining eviction thread");
+        mEvictionThread->join();
+    }
+
+    LOG_INFO(DEFAULT_LOG, "Joined all {} threads", (mWorkerThreads.size() + 1));
 }
 
 std::string
 ApplicationImpl::manualClose(std::optional<uint32_t> const& manualLedgerSeq,
                              std::optional<TimePoint> const& manualCloseTime)
 {
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
 
     // Manual close only makes sense for validating nodes
     if (!mConfig.NODE_IS_VALIDATOR)
@@ -1141,6 +1111,11 @@ ApplicationImpl::getLoadGenerator()
     }
     return *mLoadGenerator;
 }
+Config&
+ApplicationImpl::getMutableConfig()
+{
+    return mConfig;
+}
 #endif
 
 void
@@ -1261,7 +1236,7 @@ ApplicationImpl::syncAllMetrics()
 {
     mHerder->syncMetrics();
     mLedgerManager->syncMetrics();
-    mCatchupManager->syncMetrics();
+    mLedgerApplyManager->syncMetrics();
     syncOwnMetrics();
 }
 
@@ -1297,10 +1272,10 @@ ApplicationImpl::getBucketManager()
     return *mBucketManager;
 }
 
-CatchupManager&
-ApplicationImpl::getCatchupManager()
+LedgerApplyManager&
+ApplicationImpl::getLedgerApplyManager()
 {
-    return *mCatchupManager;
+    return *mLedgerApplyManager;
 }
 
 HistoryArchiveManager&
@@ -1393,6 +1368,27 @@ ApplicationImpl::getWorkerIOContext()
     return mWorkerIOContext;
 }
 
+asio::io_context&
+ApplicationImpl::getEvictionIOContext()
+{
+    releaseAssert(mEvictionIOContext);
+    return *mEvictionIOContext;
+}
+
+asio::io_context&
+ApplicationImpl::getOverlayIOContext()
+{
+    releaseAssert(mOverlayIOContext);
+    return *mOverlayIOContext;
+}
+
+asio::io_context&
+ApplicationImpl::getLedgerCloseIOContext()
+{
+    releaseAssert(mLedgerCloseIOContext);
+    return *mLedgerCloseIOContext;
+}
+
 void
 ApplicationImpl::postOnMainThread(std::function<void()>&& f, std::string&& name,
                                   Scheduler::ActionType type)
@@ -1421,6 +1417,44 @@ ApplicationImpl::postOnBackgroundThread(std::function<void()>&& f,
                             "executed after"};
     asio::post(getWorkerIOContext(), [this, f = std::move(f), isSlow]() {
         mPostOnBackgroundThreadDelay.Update(isSlow.checkElapsedTime());
+        f();
+    });
+}
+
+void
+ApplicationImpl::postOnEvictionBackgroundThread(std::function<void()>&& f,
+                                                std::string jobName)
+{
+    LogSlowExecution isSlow{std::move(jobName), LogSlowExecution::Mode::MANUAL,
+                            "executed after"};
+    asio::post(getEvictionIOContext(), [this, f = std::move(f), isSlow]() {
+        mPostOnBackgroundThreadDelay.Update(isSlow.checkElapsedTime());
+        f();
+    });
+}
+
+void
+ApplicationImpl::postOnOverlayThread(std::function<void()>&& f,
+                                     std::string jobName)
+{
+    releaseAssert(mOverlayIOContext);
+    LogSlowExecution isSlow{std::move(jobName), LogSlowExecution::Mode::MANUAL,
+                            "executed after"};
+    asio::post(*mOverlayIOContext, [this, f = std::move(f), isSlow]() {
+        mPostOnOverlayThreadDelay.Update(isSlow.checkElapsedTime());
+        f();
+    });
+}
+
+void
+ApplicationImpl::postOnLedgerCloseThread(std::function<void()>&& f,
+                                         std::string jobName)
+{
+    releaseAssert(mLedgerCloseIOContext);
+    LogSlowExecution isSlow{std::move(jobName), LogSlowExecution::Mode::MANUAL,
+                            "executed after"};
+    asio::post(*mLedgerCloseIOContext, [this, f = std::move(f), isSlow]() {
+        mPostOnLedgerCloseThreadDelay.Update(isSlow.checkElapsedTime());
         f();
     });
 }
@@ -1467,8 +1501,19 @@ ApplicationImpl::createDatabase()
 AbstractLedgerTxnParent&
 ApplicationImpl::getLedgerTxnRoot()
 {
-    assertThreadIsMain();
-    return mConfig.MODE_USES_IN_MEMORY_LEDGER ? *mNeverCommittingLedgerTxn
-                                              : *mLedgerTxnRoot;
+#ifdef BUILD_TESTS
+    if (mConfig.MODE_USES_IN_MEMORY_LEDGER)
+    {
+        return *mNeverCommittingLedgerTxn;
+    }
+#endif
+
+    return *mLedgerTxnRoot;
+}
+
+AppConnector&
+ApplicationImpl::getAppConnector()
+{
+    return *mAppConnector;
 }
 }

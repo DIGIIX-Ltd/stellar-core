@@ -1,6 +1,6 @@
 
 {
-	"!cfg protocol version" : 20,
+	"!cfg protocol version" : 22,
 	"!rng seed" : 12345,
 	"!test all versions" : true,
 	"!versions to test" : 
@@ -25,7 +25,9 @@
 		17,
 		18,
 		19,
-		20
+		20,
+		21,
+		22
 	],
 	"manage buy offer exactly crosses existing offers|protocol version 0" : 
 	[
@@ -169,49 +171,8 @@
 		"31BgfxYaBsc=",
 		"QDdAoFuIBsU=",
 		"YSJ+9xr/aJw=",
-		"4Wm8HxlUP6I=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"i2QW8kg5xd8=",
-		"dWN8HEOmoPg=",
-		"31BgfxYaBsc=",
-		"QDdAoFuIBsU=",
-		"YSJ+9xr/aJw=",
-		"4Wm8HxlUP6I=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"i2QW8kg5xd8=",
-		"dWN8HEOmoPg=",
-		"31BgfxYaBsc=",
-		"QDdAoFuIBsU=",
-		"YSJ+9xr/aJw=",
-		"4Wm8HxlUP6I=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"i2QW8kg5xd8=",
-		"dWN8HEOmoPg=",
-		"31BgfxYaBsc=",
-		"QDdAoFuIBsU=",
-		"YSJ+9xr/aJw=",
-		"4Wm8HxlUP6I=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"i2QW8kg5xd8=",
-		"dWN8HEOmoPg=",
-		"31BgfxYaBsc=",
-		"QDdAoFuIBsU=",
-		"YSJ+9xr/aJw=",
 		"4Wm8HxlUP6I="
 	],
-	"manage buy offer exactly crosses existing offers|protocol version 19|buy five for two" : [ "R7qV9Hlytg0=", "aVY5V7tNA1w=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 19|buy one for one" : [ "jFQwG+FDEQ0=", "CDByfnyXVDI=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 19|buy one for two" : [ "EqQht9YsMdM=", "UKrqiSwRaeU=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 19|buy two for five" : [ "3rsQRriFVtM=", "942uBzchdi8=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 19|buy two for one" : [ "A9sWO8Q0pTc=", "JTnaV/I6L7s=" ],
 	"manage buy offer exactly crosses existing offers|protocol version 2" : 
 	[
 		"0V3jr/3FY6U=",
@@ -225,6 +186,18 @@
 		"J6AnICwXR3s="
 	],
 	"manage buy offer exactly crosses existing offers|protocol version 20" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY="
+	],
+	"manage buy offer exactly crosses existing offers|protocol version 21" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -272,11 +245,64 @@
 		"RLfXSaItxO4=",
 		"cf7g8T0DhvY="
 	],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy five for two" : [ "f2Jax9dKFZA=", "IMjgcSt8R8k=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy one for one" : [ "ork7qlKndVw=", "113zhCcyxaI=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy one for two" : [ "cH9E5WE9MAg=", "Lx+Iu3Li/mg=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy two for five" : [ "9wksnZF1zQU=", "DEJpPfg7Y2A=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy two for one" : [ "2845iDhc7cM=", "MIKp65Kyol8=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 21|buy five for two" : [ "f2Jax9dKFZA=", "IMjgcSt8R8k=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 21|buy one for one" : [ "ork7qlKndVw=", "113zhCcyxaI=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 21|buy one for two" : [ "cH9E5WE9MAg=", "Lx+Iu3Li/mg=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 21|buy two for five" : [ "9wksnZF1zQU=", "DEJpPfg7Y2A=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 21|buy two for one" : [ "2845iDhc7cM=", "MIKp65Kyol8=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY="
+	],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy five for two" : [ "f2Jax9dKFZA=", "IMjgcSt8R8k=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy one for one" : [ "ork7qlKndVw=", "113zhCcyxaI=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy one for two" : [ "cH9E5WE9MAg=", "Lx+Iu3Li/mg=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy two for five" : [ "9wksnZF1zQU=", "DEJpPfg7Y2A=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy two for one" : [ "2845iDhc7cM=", "MIKp65Kyol8=" ],
 	"manage buy offer exactly crosses existing offers|protocol version 3" : 
 	[
 		"0V3jr/3FY6U=",
@@ -381,139 +407,12 @@
 	"manage buy offer failure modes|protocol version 17|negative offerID" : [ "EiELMVKqjjk=" ],
 	"manage buy offer failure modes|protocol version 18" : [ "S1Ssa9DXLPU=", "DByKJ9fR/LQ=", "S1Ssa9DXLPU=", "DByKJ9fR/LQ=" ],
 	"manage buy offer failure modes|protocol version 18|negative offerID" : [ "EiELMVKqjjk=" ],
-	"manage buy offer failure modes|protocol version 19" : 
-	[
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo=",
-		"NKNcX4DjYng=",
-		"T+IeLTijUbo="
-	],
-	"manage buy offer failure modes|protocol version 19|check offer valid|buy no trust" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=" ],
-	"manage buy offer failure modes|protocol version 19|check offer valid|buy not authorized" : [ "26TF20PnJ1Y=", "U1dzxTDJUAo=", "lv9HzJDlgpc=", "3KhAal/LmK8=" ],
-	"manage buy offer failure modes|protocol version 19|check offer valid|no issuer" : 
-	[
-		"ZJ+OQVEm4zg=",
-		"s7VM2TwkbuQ=",
-		"e+c2XwfdBV0=",
-		"YY5ZQ6+6Yyc=",
-		"ZJ+OQVEm4zg=",
-		"s7VM2TwkbuQ=",
-		"e+c2XwfdBV0=",
-		"YY5ZQ6+6Yyc="
-	],
-	"manage buy offer failure modes|protocol version 19|check offer valid|no issuer|buy no issuer" : [ "NmXnfjliuI0=" ],
-	"manage buy offer failure modes|protocol version 19|check offer valid|no issuer|sell no issuer" : [ "DJOUN9+YSc0=" ],
-	"manage buy offer failure modes|protocol version 19|check offer valid|sell no balance" : [ "GgEMhILfMlI=", "NT8HJnwpCzo=", "Hq19GUNPOSs=" ],
-	"manage buy offer failure modes|protocol version 19|check offer valid|sell no trust" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=" ],
-	"manage buy offer failure modes|protocol version 19|check offer valid|sell not authorized" : 
-	[
-		"YdGBvr8efiM=",
-		"U1dzxTDJUAo=",
-		"N4sTcqx/YhU=",
-		"snSRbQExCsQ=",
-		"RI0VDXZphOY=",
-		"FhAR25zuXpc=",
-		"F2i9ED14LGc="
-	],
-	"manage buy offer failure modes|protocol version 19|check valid|buying and selling same asset" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=" ],
-	"manage buy offer failure modes|protocol version 19|check valid|buying asset not valid" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=" ],
-	"manage buy offer failure modes|protocol version 19|check valid|delete and create" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=" ],
-	"manage buy offer failure modes|protocol version 19|check valid|negative amount" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=" ],
-	"manage buy offer failure modes|protocol version 19|check valid|non-positive price denominator" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=", "GKBK/PWXK5I=" ],
-	"manage buy offer failure modes|protocol version 19|check valid|non-positive price numerator" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=", "GKBK/PWXK5I=" ],
-	"manage buy offer failure modes|protocol version 19|check valid|selling asset not valid" : [ "GgEMhILfMlI=", "bBHXvO6LeFA=" ],
-	"manage buy offer failure modes|protocol version 19|compute offer exchange parameters|buying liabilities" : 
-	[
-		"pp8/BfPxdBs=",
-		"M7Tr9BCP0iY=",
-		"NWn1+DiPX4A=",
-		"5xnNfrwL1Xc=",
-		"BVxaT1fspm4=",
-		"MQpcVnzSqDo=",
-		"FgRExAFdX34=",
-		"XSBy1jJKPXY="
-	],
-	"manage buy offer failure modes|protocol version 19|compute offer exchange parameters|reserve" : 
-	[
-		"Fe+hUF4jcaA=",
-		"n40nL+prrSc=",
-		"Onfg8nwffrE=",
-		"kZ0mLUSpEOk=",
-		"uBgbKIF1R8A=",
-		"PYJFJmwNVvE=",
-		"sqHPKSl4+14=",
-		"zJ02Ox7ia14=",
-		"KjLZjmPZOoM=",
-		"5BHvvUopAGw=",
-		"cmMPxUbkAb8=",
-		"nBma66rG8ds="
-	],
-	"manage buy offer failure modes|protocol version 19|compute offer exchange parameters|selling liabilities" : 
-	[
-		"pp8/BfPxdBs=",
-		"M7Tr9BCP0iY=",
-		"HYgXULktCLU=",
-		"+gbAp8naCww=",
-		"Pz8Up4SAW2A=",
-		"dw+nEi2CfR0=",
-		"uPM6k5AkYYM="
-	],
+	"manage buy offer failure modes|protocol version 19" : [ "NKNcX4DjYng=", "T+IeLTijUbo=", "NKNcX4DjYng=", "T+IeLTijUbo=" ],
 	"manage buy offer failure modes|protocol version 19|negative offerID" : [ "ELdDEpcNC24=" ],
-	"manage buy offer failure modes|protocol version 19|offer must exist and be owned by source account to modify or delete" : 
-	[
-		"ZJ+OQVEm4zg=",
-		"s7VM2TwkbuQ=",
-		"fzHn3y8aGi0=",
-		"kZ0mLUSpEOk=",
-		"uBgbKIF1R8A=",
-		"ijGM55Oa26E=",
-		"ZvKepfmBtTk=",
-		"aEq56PEtuKs=",
-		"51ZM27Mu0LU=",
-		"5BHvvUopAGw=",
-		"cmMPxUbkAb8=",
-		"ITMv/HcQB8c=",
-		"6o6zxGeaRgQ=",
-		"2Kz3WLw6ZHk="
-	],
 	"manage buy offer failure modes|protocol version 2" : [ "pSsR7xl1ZzY=", "OaXP621I0jI=", "pSsR7xl1ZzY=", "OaXP621I0jI=" ],
-	"manage buy offer failure modes|protocol version 20" : 
+	"manage buy offer failure modes|protocol version 20" : [ "9dXbtfL8fWA=", "hhLRGp7Bj1U=", "9dXbtfL8fWA=", "hhLRGp7Bj1U=" ],
+	"manage buy offer failure modes|protocol version 20|negative offerID" : [ "yPMAWpGp2E0=" ],
+	"manage buy offer failure modes|protocol version 21" : 
 	[
 		"9dXbtfL8fWA=",
 		"hhLRGp7Bj1U=",
@@ -556,9 +455,9 @@
 		"9dXbtfL8fWA=",
 		"hhLRGp7Bj1U="
 	],
-	"manage buy offer failure modes|protocol version 20|check offer valid|buy no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|buy not authorized" : [ "sTij86uB8RY=", "j5mS8c/IkIM=", "d+LDJudqBVE=", "W09yiumqHx0=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|no issuer" : 
+	"manage buy offer failure modes|protocol version 21|check offer valid|buy no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 21|check offer valid|buy not authorized" : [ "sTij86uB8RY=", "j5mS8c/IkIM=", "d+LDJudqBVE=", "W09yiumqHx0=" ],
+	"manage buy offer failure modes|protocol version 21|check offer valid|no issuer" : 
 	[
 		"vrcpoTS4ADg=",
 		"x0/JBz5sTJI=",
@@ -569,11 +468,11 @@
 		"72LJWDmaLfo=",
 		"zPajUjXRuV0="
 	],
-	"manage buy offer failure modes|protocol version 20|check offer valid|no issuer|buy no issuer" : [ "rJJm0hUR9OA=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|no issuer|sell no issuer" : [ "/k5kLi2BScI=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|sell no balance" : [ "/l+eA7wt7z4=", "th4n5fNLbMs=", "YWi+HK7TYMc=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|sell no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|sell not authorized" : 
+	"manage buy offer failure modes|protocol version 21|check offer valid|no issuer|buy no issuer" : [ "rJJm0hUR9OA=" ],
+	"manage buy offer failure modes|protocol version 21|check offer valid|no issuer|sell no issuer" : [ "/k5kLi2BScI=" ],
+	"manage buy offer failure modes|protocol version 21|check offer valid|sell no balance" : [ "/l+eA7wt7z4=", "th4n5fNLbMs=", "YWi+HK7TYMc=" ],
+	"manage buy offer failure modes|protocol version 21|check offer valid|sell no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 21|check offer valid|sell not authorized" : 
 	[
 		"llEyEz9zLMU=",
 		"j5mS8c/IkIM=",
@@ -583,14 +482,14 @@
 		"1E+w+N7PB7I=",
 		"6rbHXJ+i/uw="
 	],
-	"manage buy offer failure modes|protocol version 20|check valid|buying and selling same asset" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|buying asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|delete and create" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|negative amount" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|non-positive price denominator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|non-positive price numerator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|selling asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|compute offer exchange parameters|buying liabilities" : 
+	"manage buy offer failure modes|protocol version 21|check valid|buying and selling same asset" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 21|check valid|buying asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 21|check valid|delete and create" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 21|check valid|negative amount" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 21|check valid|non-positive price denominator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 21|check valid|non-positive price numerator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 21|check valid|selling asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 21|compute offer exchange parameters|buying liabilities" : 
 	[
 		"OEq7NNkTw2Y=",
 		"xDXuncg7G7M=",
@@ -601,7 +500,7 @@
 		"/lqrf/sMCZc=",
 		"PibsXuAnxio="
 	],
-	"manage buy offer failure modes|protocol version 20|compute offer exchange parameters|reserve" : 
+	"manage buy offer failure modes|protocol version 21|compute offer exchange parameters|reserve" : 
 	[
 		"SSW1pG7COBo=",
 		"+i2TO4g1rt8=",
@@ -616,7 +515,7 @@
 		"yxcoWcTr3Hc=",
 		"zsj8khzi9Pw="
 	],
-	"manage buy offer failure modes|protocol version 20|compute offer exchange parameters|selling liabilities" : 
+	"manage buy offer failure modes|protocol version 21|compute offer exchange parameters|selling liabilities" : 
 	[
 		"OEq7NNkTw2Y=",
 		"xDXuncg7G7M=",
@@ -626,8 +525,139 @@
 		"IW5RzBoTYAE=",
 		"dy48BUDNKNs="
 	],
-	"manage buy offer failure modes|protocol version 20|negative offerID" : [ "yPMAWpGp2E0=" ],
-	"manage buy offer failure modes|protocol version 20|offer must exist and be owned by source account to modify or delete" : 
+	"manage buy offer failure modes|protocol version 21|negative offerID" : [ "yPMAWpGp2E0=" ],
+	"manage buy offer failure modes|protocol version 21|offer must exist and be owned by source account to modify or delete" : 
+	[
+		"vrcpoTS4ADg=",
+		"x0/JBz5sTJI=",
+		"wqVrAAEW6U4=",
+		"GXIFp0s7wvw=",
+		"1sM3xrNi0yk=",
+		"P74AkLt6u00=",
+		"Rlo3jM6LfPQ=",
+		"Y2Ti2/N8aFQ=",
+		"A1JvjoZP4j4=",
+		"WaUFHM9tW9M=",
+		"yxcoWcTr3Hc=",
+		"qIfi2uZq5S0=",
+		"zsN++/TwWhg=",
+		"i3oJ+v48Bgo="
+	],
+	"manage buy offer failure modes|protocol version 22" : 
+	[
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U=",
+		"9dXbtfL8fWA=",
+		"hhLRGp7Bj1U="
+	],
+	"manage buy offer failure modes|protocol version 22|check offer valid|buy no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|buy not authorized" : [ "sTij86uB8RY=", "j5mS8c/IkIM=", "d+LDJudqBVE=", "W09yiumqHx0=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|no issuer" : 
+	[
+		"vrcpoTS4ADg=",
+		"x0/JBz5sTJI=",
+		"72LJWDmaLfo=",
+		"zPajUjXRuV0=",
+		"vrcpoTS4ADg=",
+		"x0/JBz5sTJI=",
+		"72LJWDmaLfo=",
+		"zPajUjXRuV0="
+	],
+	"manage buy offer failure modes|protocol version 22|check offer valid|no issuer|buy no issuer" : [ "rJJm0hUR9OA=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|no issuer|sell no issuer" : [ "/k5kLi2BScI=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|sell no balance" : [ "/l+eA7wt7z4=", "th4n5fNLbMs=", "YWi+HK7TYMc=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|sell no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|sell not authorized" : 
+	[
+		"llEyEz9zLMU=",
+		"j5mS8c/IkIM=",
+		"JOxygO5yllE=",
+		"Y2Q8XddDP9k=",
+		"1BF3X2P6h6E=",
+		"1E+w+N7PB7I=",
+		"6rbHXJ+i/uw="
+	],
+	"manage buy offer failure modes|protocol version 22|check valid|buying and selling same asset" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|buying asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|delete and create" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|negative amount" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|non-positive price denominator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|non-positive price numerator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|selling asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|compute offer exchange parameters|buying liabilities" : 
+	[
+		"OEq7NNkTw2Y=",
+		"xDXuncg7G7M=",
+		"2xLN+2//4xw=",
+		"b/HGS0z8Ax8=",
+		"ff0z5CPAsZI=",
+		"jPdOb+4vCsU=",
+		"/lqrf/sMCZc=",
+		"PibsXuAnxio="
+	],
+	"manage buy offer failure modes|protocol version 22|compute offer exchange parameters|reserve" : 
+	[
+		"SSW1pG7COBo=",
+		"+i2TO4g1rt8=",
+		"soQVihbhTnQ=",
+		"GXIFp0s7wvw=",
+		"1sM3xrNi0yk=",
+		"oZTO1iZd+Ag=",
+		"oGOLp9QureM=",
+		"jK+Iow8hQw8=",
+		"NEv2ViOuZ9A=",
+		"WaUFHM9tW9M=",
+		"yxcoWcTr3Hc=",
+		"zsj8khzi9Pw="
+	],
+	"manage buy offer failure modes|protocol version 22|compute offer exchange parameters|selling liabilities" : 
+	[
+		"OEq7NNkTw2Y=",
+		"xDXuncg7G7M=",
+		"iVTUnezMWUc=",
+		"YcaRqCvunS0=",
+		"JCRE9nHkU7k=",
+		"IW5RzBoTYAE=",
+		"dy48BUDNKNs="
+	],
+	"manage buy offer failure modes|protocol version 22|negative offerID" : [ "yPMAWpGp2E0=" ],
+	"manage buy offer failure modes|protocol version 22|offer must exist and be owned by source account to modify or delete" : 
 	[
 		"vrcpoTS4ADg=",
 		"x0/JBz5sTJI=",
@@ -745,218 +775,7 @@
 		"9Vyygu3vRUU=",
 		"CfIA/nz+th4=",
 		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
 		"23NqPiSmYWs="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with no rounding|sell five for two" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"JpwjcGJ01X0=",
-		"dYMJsb8suRo=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"PFYzaxyS+RE=",
-		"POHiQ6UF7Qo="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with no rounding|sell one for one" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"WdJTdYlfMcY=",
-		"Evda/VaqXHo=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"yKPeVQ80F6Q=",
-		"0EpIUHz6Wq4="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with no rounding|sell one for two" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"Gl+1IdmuV3w=",
-		"q8Lu475VwXo=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"mZbwLYguR1k=",
-		"pd5mapBskoE="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with no rounding|sell two for five" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"eNV/WLUbrUM=",
-		"nePuE3Fqt98=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"zMWUNAgQmR4=",
-		"WWU8jnMYCiE="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with no rounding|sell two for one" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"YebnwVgykqc=",
-		"bW+z3b0DP5A=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"jC81RbbEnS4=",
-		"n2w1Ogja5fA="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with rounding|sell five for two" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"JpwjcGJ01X0=",
-		"TuF8aqLfDuM=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"PFYzaxyS+RE=",
-		"AGF7VHu6xok="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with rounding|sell one for two" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"Gl+1IdmuV3w=",
-		"q8Lu475VwXo=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"mZbwLYguR1k=",
-		"pd5mapBskoE="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with rounding|sell two for five" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"eNV/WLUbrUM=",
-		"nePuE3Fqt98=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"zMWUNAgQmR4=",
-		"WWU8jnMYCiE="
-	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 19|with rounding|sell two for one" : 
-	[
-		"9X3AI14PzjU=",
-		"iYo83vFE0dI=",
-		"k6kkpAOp7hs=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"YebnwVgykqc=",
-		"IoRN/LdNBYI=",
-		"W13V0rLRGS0=",
-		"iX5rxq/1ruM=",
-		"543ifWTTlLc=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"jC81RbbEnS4=",
-		"eYacWSWApTk="
 	],
 	"manage buy offer matches manage sell offer when executing entirely|protocol version 2" : 
 	[
@@ -967,6 +786,14 @@
 		"xImpHFt3vHM="
 	],
 	"manage buy offer matches manage sell offer when executing entirely|protocol version 20" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -1014,7 +841,7 @@
 		"VqSyipOoncY=",
 		"fnKlD+pmstc="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell five for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1033,7 +860,7 @@
 		"55Lx77kiwtA=",
 		"7cHy+Bv7zJM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell one for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1052,7 +879,7 @@
 		"QN+sMl1qzsE=",
 		"zB5aj4A/in0="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell one for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1071,7 +898,7 @@
 		"Z8QOa2Lf1Js=",
 		"4oGh2Vm2WuM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell two for five" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1090,7 +917,7 @@
 		"ADL3jCN5is4=",
 		"Oe3PjnrWUxM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell two for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1109,7 +936,7 @@
 		"oTZXPqCpx3A=",
 		"wOdl1LjGioo="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell five for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1128,7 +955,7 @@
 		"55Lx77kiwtA=",
 		"5+ugJFCIH+w="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell one for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1147,7 +974,7 @@
 		"Z8QOa2Lf1Js=",
 		"4oGh2Vm2WuM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell two for five" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1166,7 +993,226 @@
 		"ADL3jCN5is4=",
 		"Oe3PjnrWUxM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell two for one" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"6fJUg4n0yZU=",
+		"TMu3MaKpmrM=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"oTZXPqCpx3A=",
+		"MkupXHhVE5g="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell five for two" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"/7JDNjN+LE0=",
+		"FslDww2NPMY=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"55Lx77kiwtA=",
+		"7cHy+Bv7zJM="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell one for one" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"eqQvZh1Gad0=",
+		"ZFlL9liqnx4=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"QN+sMl1qzsE=",
+		"zB5aj4A/in0="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell one for two" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"xRvUseYlTV4=",
+		"lXr7o+fncLY=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"Z8QOa2Lf1Js=",
+		"4oGh2Vm2WuM="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell two for five" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"/9hliOwdI3c=",
+		"W4MXPFBJdr0=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"ADL3jCN5is4=",
+		"Oe3PjnrWUxM="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell two for one" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"6fJUg4n0yZU=",
+		"8LDtLfdZXms=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"oTZXPqCpx3A=",
+		"wOdl1LjGioo="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell five for two" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"/7JDNjN+LE0=",
+		"mlEIWy6M7Ko=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"55Lx77kiwtA=",
+		"5+ugJFCIH+w="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell one for two" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"xRvUseYlTV4=",
+		"lXr7o+fncLY=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"Z8QOa2Lf1Js=",
+		"4oGh2Vm2WuM="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell two for five" : 
+	[
+		"P8vF8lE6r20=",
+		"byrhUNudfmU=",
+		"o+QHqnmup9U=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"/9hliOwdI3c=",
+		"W4MXPFBJdr0=",
+		"40ni5APTf3Q=",
+		"4N2VIlXr+bs=",
+		"AXwD9/bfXgk=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"ADL3jCN5is4=",
+		"Oe3PjnrWUxM="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell two for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1335,218 +1381,7 @@
 		"9Vyygu3vRUU=",
 		"CfIA/nz+th4=",
 		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
-		"23NqPiSmYWs=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"NtO71xF7EJM=",
 		"23NqPiSmYWs="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with no rounding|sell five for two" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"fNmrHQZYw6U=",
-		"zLB8ZPC+Ujo=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"T4yShYfZo1s=",
-		"XOjkddn2CZQ="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with no rounding|sell one for one" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"4WLNn7pfWSo=",
-		"j64VK3lUyC4=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"/KB0y79MRJU=",
-		"7SZpwdp4ACQ="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with no rounding|sell one for two" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"zdhwPX8Jr4I=",
-		"A4zLjgyxgJw=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"bxh+tnh4N34=",
-		"ukJfg3tBTjo="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with no rounding|sell two for five" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"iGLYC4o6ROQ=",
-		"FHwCn0Hvs4g=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"IalRiDHQECE=",
-		"uk24f4S2xrA="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with no rounding|sell two for one" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"Blw2Eg080FE=",
-		"j8coVNFAwPg=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"Av8Yh6XB3+g=",
-		"lZjVc5nb3No="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with rounding|sell five for two" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"fNmrHQZYw6U=",
-		"vwPJFQ2fjlU=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"T4yShYfZo1s=",
-		"Kwl5yw5W+Zk="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with rounding|sell one for two" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"zdhwPX8Jr4I=",
-		"A4zLjgyxgJw=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"bxh+tnh4N34=",
-		"ukJfg3tBTjo="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with rounding|sell two for five" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"iGLYC4o6ROQ=",
-		"FHwCn0Hvs4g=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"IalRiDHQECE=",
-		"uk24f4S2xrA="
-	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 19|with rounding|sell two for one" : 
-	[
-		"ZC5XJyxoZoE=",
-		"VBbgdFNMMZA=",
-		"DSnYFDe2qEo=",
-		"Jl+CYtwMJeo=",
-		"mK8WPV5CuvE=",
-		"bEfEshzpZpA=",
-		"Blw2Eg080FE=",
-		"yTos4F/xrQE=",
-		"XIiPHG1/WO4=",
-		"tDpCvcYqolE=",
-		"Fd97j55uTUA=",
-		"MoXtOSbr8M0=",
-		"z0OV7qB0Vtc=",
-		"qhqHQlo47lM=",
-		"Av8Yh6XB3+g=",
-		"kU5Re9taih8="
 	],
 	"manage buy offer matches manage sell offer when executing partially|protocol version 2" : 
 	[
@@ -1557,6 +1392,14 @@
 		"xImpHFt3vHM="
 	],
 	"manage buy offer matches manage sell offer when executing partially|protocol version 20" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -1604,7 +1447,7 @@
 		"VqSyipOoncY=",
 		"fnKlD+pmstc="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell five for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1623,7 +1466,7 @@
 		"o2VQHswA9Js=",
 		"IkXWBoQ+FI4="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell one for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1642,7 +1485,7 @@
 		"ig37ctqOVD8=",
 		"Vh+ZmVe3J3g="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell one for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1661,7 +1504,7 @@
 		"4z5heX2BbGo=",
 		"2oeLF7ukrG0="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell two for five" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1680,7 +1523,7 @@
 		"lk2yZFPMDpU=",
 		"CumCCVzfkwQ="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell two for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1699,7 +1542,7 @@
 		"m3H+2Oww4Kk=",
 		"RxnJOuhImAU="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell five for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1718,7 +1561,7 @@
 		"o2VQHswA9Js=",
 		"kD46nG3cuGo="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell one for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1737,7 +1580,7 @@
 		"4z5heX2BbGo=",
 		"2oeLF7ukrG0="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell two for five" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1756,7 +1599,226 @@
 		"lk2yZFPMDpU=",
 		"CumCCVzfkwQ="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell two for one" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"DiLHqEpjnG4=",
+		"klyDRvFKG9A=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"m3H+2Oww4Kk=",
+		"xteIEp3vQuQ="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell five for two" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"jRG2IAyXrNQ=",
+		"SG0CvO4c3Cc=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"o2VQHswA9Js=",
+		"IkXWBoQ+FI4="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell one for one" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"Aokp7pg6t2A=",
+		"k4KqnxIxJ/4=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"ig37ctqOVD8=",
+		"Vh+ZmVe3J3g="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell one for two" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"3I6rLfGQ6RE=",
+		"r8gIkPJPdSc=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"4z5heX2BbGo=",
+		"2oeLF7ukrG0="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell two for five" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"/XWpdAajYTc=",
+		"++EcMdjybjo=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"lk2yZFPMDpU=",
+		"CumCCVzfkwQ="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell two for one" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"DiLHqEpjnG4=",
+		"8DaRUnI/fD8=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"m3H+2Oww4Kk=",
+		"RxnJOuhImAU="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell five for two" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"jRG2IAyXrNQ=",
+		"DAlJmkTxZzc=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"o2VQHswA9Js=",
+		"kD46nG3cuGo="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell one for two" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"3I6rLfGQ6RE=",
+		"r8gIkPJPdSc=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"4z5heX2BbGo=",
+		"2oeLF7ukrG0="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell two for five" : 
+	[
+		"6VP5Lm2ROJ4=",
+		"3lAZ7SdAvlo=",
+		"VFXhhbgwYQA=",
+		"jbZxEFNc7cs=",
+		"MWrmldUEti8=",
+		"GpaN21Fp72U=",
+		"/XWpdAajYTc=",
+		"++EcMdjybjo=",
+		"Nt+9BOaX4k8=",
+		"Px7JpCGgs7k=",
+		"Elh8k6Sg1tY=",
+		"ZcIKkuEjcSg=",
+		"Cv9SjghJ6y8=",
+		"5nsG1BSgzZs=",
+		"lk2yZFPMDpU=",
+		"CumCCVzfkwQ="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell two for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1842,137 +1904,10 @@
 	"manage buy offer matches manage sell offer when not executing|protocol version 16" : [ "SOm0iEESjQ4=", "EOCYn1h4YxQ=", "6zTp9s2F2J8=" ],
 	"manage buy offer matches manage sell offer when not executing|protocol version 17" : [ "SOm0iEESjQ4=", "EOCYn1h4YxQ=", "6zTp9s2F2J8=" ],
 	"manage buy offer matches manage sell offer when not executing|protocol version 18" : [ "SOm0iEESjQ4=", "EOCYn1h4YxQ=", "6zTp9s2F2J8=" ],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19" : 
-	[
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with no rounding|sell five for two" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"CpUxMgIik08=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"tvw+A6KjecQ="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with no rounding|sell one for one" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"a13XnVBZJHU=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"ZcPFllwPsBs="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with no rounding|sell one for two" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"ISxpDcU68j8=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"ybiUT9PhQd4="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with no rounding|sell two for five" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"wc02GIVAP8E=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"9aM4lMWH5GE="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with no rounding|sell two for one" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"tOqF2DzoJhQ=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"kUM9nkZmstY="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with rounding|sell five for two" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"Cs4RalLk+YA=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"j0dYa6VsAns="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with rounding|sell one for two" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"ISxpDcU68j8=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"ybiUT9PhQd4="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with rounding|sell two for five" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"wc02GIVAP8E=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"9aM4lMWH5GE="
-	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 19|with rounding|sell two for one" : 
-	[
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"porbdH/sfRk=",
-		"1rExl9gFMH0=",
-		"+5yqk/v73ds=",
-		"NbyPxVTdYCc=",
-		"Tk/CGd7g8n8="
-	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 19" : [ "aQnJD/5Fe6M=", "9Vyygu3vRUU=", "CfIA/nz+th4=" ],
 	"manage buy offer matches manage sell offer when not executing|protocol version 2" : [ "0V3jr/3FY6U=", "51b61LbEuXc=", "XBao9BgO1jU=" ],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 20" : [ "Vazya62AJ3s=", "HXWRSmG+rKE=", "T2T23nzwrC4=" ],
+	"manage buy offer matches manage sell offer when not executing|protocol version 21" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -2002,7 +1937,7 @@
 		"HXWRSmG+rKE=",
 		"T2T23nzwrC4="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell five for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2013,7 +1948,7 @@
 		"aTL86/B18Dw=",
 		"pD7tbrT1ol8="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell one for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2024,7 +1959,7 @@
 		"aTL86/B18Dw=",
 		"zzzl1v91Hi0="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell one for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2035,7 +1970,7 @@
 		"aTL86/B18Dw=",
 		"s2qjgyhgSAg="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell two for five" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2046,7 +1981,7 @@
 		"aTL86/B18Dw=",
 		"mX2g1raoCHQ="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell two for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2057,7 +1992,7 @@
 		"aTL86/B18Dw=",
 		"+PMhuiQN1v0="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell five for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2068,7 +2003,7 @@
 		"aTL86/B18Dw=",
 		"/NgThMLl5/o="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell one for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2079,7 +2014,7 @@
 		"aTL86/B18Dw=",
 		"s2qjgyhgSAg="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell two for five" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2090,7 +2025,136 @@
 		"aTL86/B18Dw=",
 		"mX2g1raoCHQ="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell two for one" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"zQB5ZnsR7ao=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"DiY9yNqGZcQ="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell five for two" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"zhN0Gb7PwEs=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"pD7tbrT1ol8="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell one for one" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"wF/oSA8Y0xw=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"zzzl1v91Hi0="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell one for two" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"X7KJF+hTtzw=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"s2qjgyhgSAg="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell two for five" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"sDp/W//8J4g=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"mX2g1raoCHQ="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell two for one" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"O1WmoZ2mIww=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"+PMhuiQN1v0="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell five for two" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"wfUZuEt2x84=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"/NgThMLl5/o="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell one for two" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"X7KJF+hTtzw=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"s2qjgyhgSAg="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell two for five" : 
+	[
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"sDp/W//8J4g=",
+		"yFmR/Y4QWFI=",
+		"tP2jrDYZ+mA=",
+		"aTL86/B18Dw=",
+		"mX2g1raoCHQ="
+	],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell two for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2202,15 +2266,8 @@
 		"9Vyygu3vRUU=",
 		"gg2NYyVPoxU=",
 		"xTLWI+8/hD8=",
-		"HEKmnuIHpQY=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"gg2NYyVPoxU=",
-		"xTLWI+8/hD8=",
 		"HEKmnuIHpQY="
 	],
-	"manage buy offer releases liabilities before modify|protocol version 19|change amount" : [ "LcnBkLWMxNM=", "Qc3K+HdmPr8=", "O4buHhj5rT8=" ],
-	"manage buy offer releases liabilities before modify|protocol version 19|change price" : [ "7f6Cf6FU8c4=", "8nFh3u6zm88=", "O4buHhj5rT8=" ],
 	"manage buy offer releases liabilities before modify|protocol version 2" : 
 	[
 		"0V3jr/3FY6U=",
@@ -2225,6 +2282,14 @@
 		"HXWRSmG+rKE=",
 		"rqcii/+UbMY=",
 		"cTGj2lfDAFw=",
+		"L0hCYphMZHo="
+	],
+	"manage buy offer releases liabilities before modify|protocol version 21" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"rqcii/+UbMY=",
+		"cTGj2lfDAFw=",
 		"L0hCYphMZHo=",
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -2232,8 +2297,23 @@
 		"cTGj2lfDAFw=",
 		"L0hCYphMZHo="
 	],
-	"manage buy offer releases liabilities before modify|protocol version 20|change amount" : [ "/mSIIR+0ghc=", "7gTN3fWAlpI=", "X0uANRIoe7o=" ],
-	"manage buy offer releases liabilities before modify|protocol version 20|change price" : [ "6nuK5jPfdhk=", "wucDq+9ZZxY=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 21|change amount" : [ "/mSIIR+0ghc=", "7gTN3fWAlpI=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 21|change price" : [ "6nuK5jPfdhk=", "wucDq+9ZZxY=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"rqcii/+UbMY=",
+		"cTGj2lfDAFw=",
+		"L0hCYphMZHo=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"rqcii/+UbMY=",
+		"cTGj2lfDAFw=",
+		"L0hCYphMZHo="
+	],
+	"manage buy offer releases liabilities before modify|protocol version 22|change amount" : [ "/mSIIR+0ghc=", "7gTN3fWAlpI=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 22|change price" : [ "6nuK5jPfdhk=", "wucDq+9ZZxY=", "X0uANRIoe7o=" ],
 	"manage buy offer releases liabilities before modify|protocol version 3" : 
 	[
 		"0V3jr/3FY6U=",
@@ -2432,19 +2512,8 @@
 		"6/olWKNGiX8=",
 		"vNnMi8VLqyg=",
 		"VHCnJ9JEB4Y=",
-		"4a7sGEz2ZI4=",
-		"aQnJD/5Fe6M=",
-		"9Vyygu3vRUU=",
-		"CfIA/nz+th4=",
-		"yJ4iOM3y+PY=",
-		"HPQw25hXGlY=",
-		"6/olWKNGiX8=",
-		"vNnMi8VLqyg=",
-		"VHCnJ9JEB4Y=",
 		"4a7sGEz2ZI4="
 	],
-	"manage buy offer with zero liabilities|protocol version 19|offer had zero liabilities after executing partially" : [ "FNadO4xaPBs=", "qipVuxVViRA=" ],
-	"manage buy offer with zero liabilities|protocol version 19|offer initially had zero liabilities and does not execute" : [ "cYh78ORCW/0=" ],
 	"manage buy offer with zero liabilities|protocol version 2" : 
 	[
 		"0V3jr/3FY6U=",
@@ -2467,6 +2536,18 @@
 		"d85+xcvkJPo=",
 		"U+fRGjopoIc=",
 		"CbDefR/RfQM=",
+		"BLCzQbTCc+4="
+	],
+	"manage buy offer with zero liabilities|protocol version 21" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"U+fRGjopoIc=",
+		"CbDefR/RfQM=",
 		"BLCzQbTCc+4=",
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -2478,8 +2559,31 @@
 		"CbDefR/RfQM=",
 		"BLCzQbTCc+4="
 	],
-	"manage buy offer with zero liabilities|protocol version 20|offer had zero liabilities after executing partially" : [ "E8nLigRk1Ak=", "+15LPHGxBRo=" ],
-	"manage buy offer with zero liabilities|protocol version 20|offer initially had zero liabilities and does not execute" : [ "SILhPejHYnI=" ],
+	"manage buy offer with zero liabilities|protocol version 21|offer had zero liabilities after executing partially" : [ "E8nLigRk1Ak=", "+15LPHGxBRo=" ],
+	"manage buy offer with zero liabilities|protocol version 21|offer initially had zero liabilities and does not execute" : [ "SILhPejHYnI=" ],
+	"manage buy offer with zero liabilities|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"U+fRGjopoIc=",
+		"CbDefR/RfQM=",
+		"BLCzQbTCc+4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"U+fRGjopoIc=",
+		"CbDefR/RfQM=",
+		"BLCzQbTCc+4="
+	],
+	"manage buy offer with zero liabilities|protocol version 22|offer had zero liabilities after executing partially" : [ "E8nLigRk1Ak=", "+15LPHGxBRo=" ],
+	"manage buy offer with zero liabilities|protocol version 22|offer initially had zero liabilities and does not execute" : [ "SILhPejHYnI=" ],
 	"manage buy offer with zero liabilities|protocol version 3" : 
 	[
 		"0V3jr/3FY6U=",

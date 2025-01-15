@@ -4,39 +4,44 @@
 
 #include "transactions/RestoreFootprintOpFrame.h"
 #include "TransactionUtils.h"
+#include "bucket/HotArchiveBucket.h"
+#include "ledger/LedgerManagerImpl.h"
+#include "ledger/LedgerTypeUtils.h"
+#include "medida/meter.h"
+#include "medida/timer.h"
+#include "transactions/MutableTransactionResult.h"
+#include "util/ProtocolVersion.h"
+#include <Tracy.hpp>
 
 namespace stellar
 {
 
 struct RestoreFootprintMetrics
 {
-    medida::MetricsRegistry& mMetrics;
+    SorobanMetrics& mMetrics;
 
     uint32_t mLedgerReadByte{0};
     uint32_t mLedgerWriteByte{0};
 
-    RestoreFootprintMetrics(medida::MetricsRegistry& metrics)
-        : mMetrics(metrics)
+    RestoreFootprintMetrics(SorobanMetrics& metrics) : mMetrics(metrics)
     {
     }
 
     ~RestoreFootprintMetrics()
     {
-        mMetrics
-            .NewMeter({"soroban", "restore-fprint-op", "read-ledger-byte"},
-                      "byte")
-            .Mark(mLedgerReadByte);
-        mMetrics
-            .NewMeter({"soroban", "restore-fprint-op", "write-ledger-byte"},
-                      "byte")
-            .Mark(mLedgerWriteByte);
+        mMetrics.mRestoreFpOpReadLedgerByte.Mark(mLedgerReadByte);
+        mMetrics.mRestoreFpOpWriteLedgerByte.Mark(mLedgerWriteByte);
+    }
+    medida::TimerContext
+    getExecTimer()
+    {
+        return mMetrics.mRestoreFpOpExec.TimeScope();
     }
 };
 
-RestoreFootprintOpFrame::RestoreFootprintOpFrame(Operation const& op,
-                                                 OperationResult& res,
-                                                 TransactionFrame& parentTx)
-    : OperationFrame(op, res, parentTx)
+RestoreFootprintOpFrame::RestoreFootprintOpFrame(
+    Operation const& op, TransactionFrame const& parentTx)
+    : OperationFrame(op, parentTx)
     , mRestoreFootprintOp(mOperation.body.restoreFootprintOp())
 {
 }
@@ -48,24 +53,23 @@ RestoreFootprintOpFrame::isOpSupported(LedgerHeader const& header) const
 }
 
 bool
-RestoreFootprintOpFrame::doApply(AbstractLedgerTxn& ltx)
+RestoreFootprintOpFrame::doApply(
+    AppConnector& app, AbstractLedgerTxn& ltx, Hash const& sorobanBasePrngSeed,
+    OperationResult& res, std::shared_ptr<SorobanTxData> sorobanData) const
 {
-    throw std::runtime_error("RestoreFootprintOpFrame::doApply needs Config");
-}
+    ZoneNamedN(applyZone, "RestoreFootprintOpFrame apply", true);
 
-bool
-RestoreFootprintOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
-                                 Hash const& sorobanBasePrngSeed)
-{
-    RestoreFootprintMetrics metrics(app.getMetrics());
+    RestoreFootprintMetrics metrics(app.getSorobanMetrics());
+    auto timeScope = metrics.getExecTimer();
 
     auto const& resources = mParentTx.sorobanResources();
     auto const& footprint = resources.footprint;
     auto ledgerSeq = ltx.loadHeader().current().ledgerSeq;
+    auto const& sorobanConfig = app.getSorobanNetworkConfigForApply();
+    auto const& appConfig = app.getConfig();
+    auto hotArchive = app.copySearchableHotArchiveBucketListSnapshot();
 
-    auto const& archivalSettings = app.getLedgerManager()
-                                       .getSorobanNetworkConfig()
-                                       .stateArchivalSettings();
+    auto const& archivalSettings = sorobanConfig.stateArchivalSettings();
     rust::Vec<CxxLedgerEntryRentChange> rustEntryRentChanges;
     // Extend the TTL on the restored entry to minimum TTL, including
     // the current ledger.
@@ -74,11 +78,34 @@ RestoreFootprintOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
     rustEntryRentChanges.reserve(footprint.readWrite.size());
     for (auto const& lk : footprint.readWrite)
     {
+        std::shared_ptr<HotArchiveBucketEntry> hotArchiveEntry{nullptr};
         auto ttlKey = getTTLKey(lk);
         {
+            // First check the live BucketList
             auto constTTLLtxe = ltx.loadWithoutRecord(ttlKey);
-            // Skip entry if the TTLEntry is missing or if it's already live.
-            if (!constTTLLtxe || isLive(constTTLLtxe.current(), ledgerSeq))
+            if (!constTTLLtxe)
+            {
+                // Next check the hot archive if protocol >= 23
+                if (protocolVersionStartsFrom(
+                        ltx.getHeader().ledgerVersion,
+                        HotArchiveBucket::
+                            FIRST_PROTOCOL_SUPPORTING_PERSISTENT_EVICTION))
+                {
+                    hotArchiveEntry = hotArchive->load(lk);
+                    if (!hotArchiveEntry)
+                    {
+                        // Entry doesn't exist, skip
+                        continue;
+                    }
+                }
+                else
+                {
+                    // Entry doesn't exist, skip
+                    continue;
+                }
+            }
+            // Skip entry if it's already live.
+            else if (isLive(constTTLLtxe.current(), ledgerSeq))
             {
                 continue;
             }
@@ -86,37 +113,53 @@ RestoreFootprintOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
 
         // We must load the ContractCode/ContractData entry for fee purposes, as
         // restore is considered a write
-        auto constEntryLtxe = ltx.loadWithoutRecord(lk);
+        uint32_t entrySize = 0;
+        if (hotArchiveEntry)
+        {
+            entrySize = static_cast<uint32>(
+                xdr::xdr_size(hotArchiveEntry->archivedEntry()));
+        }
+        else
+        {
+            auto constEntryLtxe = ltx.loadWithoutRecord(lk);
 
-        // We checked for TTLEntry existence above
-        releaseAssertOrThrow(constEntryLtxe);
+            // We checked for TTLEntry existence above
+            releaseAssertOrThrow(constEntryLtxe);
 
-        uint32_t entrySize =
-            static_cast<uint32>(xdr::xdr_size(constEntryLtxe.current()));
+            entrySize =
+                static_cast<uint32>(xdr::xdr_size(constEntryLtxe.current()));
+        }
+
         metrics.mLedgerReadByte += entrySize;
         if (resources.readBytes < metrics.mLedgerReadByte)
         {
-            mParentTx.pushSimpleDiagnosticError(
-                SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+            sorobanData->pushApplyTimeDiagnosticError(
+                appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
                 "operation byte-read resources exceeds amount specified",
                 {makeU64SCVal(metrics.mLedgerReadByte),
                  makeU64SCVal(resources.readBytes)});
-            innerResult().code(RESTORE_FOOTPRINT_RESOURCE_LIMIT_EXCEEDED);
+            innerResult(res).code(RESTORE_FOOTPRINT_RESOURCE_LIMIT_EXCEEDED);
             return false;
         }
 
         // To maintain consistency with InvokeHostFunction, TTLEntry
         // writes come out of refundable fee, so only add entrySize
         metrics.mLedgerWriteByte += entrySize;
+        if (!validateContractLedgerEntry(lk, entrySize, sorobanConfig,
+                                         appConfig, mParentTx, *sorobanData))
+        {
+            innerResult(res).code(RESTORE_FOOTPRINT_RESOURCE_LIMIT_EXCEEDED);
+            return false;
+        }
 
         if (resources.writeBytes < metrics.mLedgerWriteByte)
         {
-            mParentTx.pushSimpleDiagnosticError(
-                SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+            sorobanData->pushApplyTimeDiagnosticError(
+                appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
                 "operation byte-write resources exceeds amount specified",
                 {makeU64SCVal(metrics.mLedgerWriteByte),
                  makeU64SCVal(resources.writeBytes)});
-            innerResult().code(RESTORE_FOOTPRINT_RESOURCE_LIMIT_EXCEEDED);
+            innerResult(res).code(RESTORE_FOOTPRINT_RESOURCE_LIMIT_EXCEEDED);
             return false;
         }
 
@@ -130,39 +173,48 @@ RestoreFootprintOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
         rustChange.new_size_bytes = entrySize;
         rustChange.new_live_until_ledger = restoredLiveUntilLedger;
 
-        // Entry exists if we get this this point due to the constTTLLtxe
-        // loadWithoutRecord logic above.
-        auto ttlLtxe = ltx.load(ttlKey);
-        ttlLtxe.current().data.ttl().liveUntilLedgerSeq =
-            restoredLiveUntilLedger;
+        if (hotArchiveEntry)
+        {
+            ltx.restoreFromHotArchive(hotArchiveEntry->archivedEntry(),
+                                      restoredLiveUntilLedger);
+        }
+        else
+        {
+            // Entry exists in the live BucketList if we get this this point due
+            // to the constTTLLtxe loadWithoutRecord logic above.
+            ltx.restoreFromLiveBucketList(lk, restoredLiveUntilLedger);
+        }
     }
     uint32_t ledgerVersion = ltx.loadHeader().current().ledgerVersion;
     int64_t rentFee = rust_bridge::compute_rent_fee(
         app.getConfig().CURRENT_LEDGER_PROTOCOL_VERSION, ledgerVersion,
-        rustEntryRentChanges,
-        app.getLedgerManager()
-            .getSorobanNetworkConfig()
-            .rustBridgeRentFeeConfiguration(),
+        rustEntryRentChanges, sorobanConfig.rustBridgeRentFeeConfiguration(),
         ledgerSeq);
-    if (!mParentTx.consumeRefundableSorobanResources(
-            0, rentFee, ltx.loadHeader().current().ledgerVersion,
-            app.getLedgerManager().getSorobanNetworkConfig(), app.getConfig()))
+    if (!sorobanData->consumeRefundableSorobanResources(
+            0, rentFee, ltx.loadHeader().current().ledgerVersion, sorobanConfig,
+            app.getConfig(), mParentTx))
     {
-        innerResult().code(RESTORE_FOOTPRINT_INSUFFICIENT_REFUNDABLE_FEE);
+        innerResult(res).code(RESTORE_FOOTPRINT_INSUFFICIENT_REFUNDABLE_FEE);
         return false;
     }
-    innerResult().code(RESTORE_FOOTPRINT_SUCCESS);
+    innerResult(res).code(RESTORE_FOOTPRINT_SUCCESS);
     return true;
 }
 
 bool
-RestoreFootprintOpFrame::doCheckValid(SorobanNetworkConfig const& config,
-                                      uint32_t ledgerVersion)
+RestoreFootprintOpFrame::doCheckValidForSoroban(
+    SorobanNetworkConfig const& networkConfig, Config const& appConfig,
+    uint32_t ledgerVersion, OperationResult& res,
+    SorobanTxData& sorobanData) const
 {
     auto const& footprint = mParentTx.sorobanResources().footprint;
     if (!footprint.readOnly.empty())
     {
-        innerResult().code(RESTORE_FOOTPRINT_MALFORMED);
+        innerResult(res).code(RESTORE_FOOTPRINT_MALFORMED);
+        sorobanData.pushValidationTimeDiagnosticError(
+            appConfig, SCE_STORAGE, SCEC_INVALID_INPUT,
+            "read-only footprint must be empty for RestoreFootprint operation",
+            {});
         return false;
     }
 
@@ -170,7 +222,10 @@ RestoreFootprintOpFrame::doCheckValid(SorobanNetworkConfig const& config,
     {
         if (!isPersistentEntry(lk))
         {
-            innerResult().code(RESTORE_FOOTPRINT_MALFORMED);
+            innerResult(res).code(RESTORE_FOOTPRINT_MALFORMED);
+            sorobanData.pushValidationTimeDiagnosticError(
+                appConfig, SCE_STORAGE, SCEC_INVALID_INPUT,
+                "only persistent Soroban entries can be restored", {});
             return false;
         }
     }
@@ -179,7 +234,8 @@ RestoreFootprintOpFrame::doCheckValid(SorobanNetworkConfig const& config,
 }
 
 bool
-RestoreFootprintOpFrame::doCheckValid(uint32_t ledgerVersion)
+RestoreFootprintOpFrame::doCheckValid(uint32_t ledgerVersion,
+                                      OperationResult& res) const
 {
     throw std::runtime_error(
         "RestoreFootprintOpFrame::doCheckValid needs Config");
@@ -195,5 +251,11 @@ bool
 RestoreFootprintOpFrame::isSoroban() const
 {
     return true;
+}
+
+ThresholdLevel
+RestoreFootprintOpFrame::getThresholdLevel() const
+{
+    return ThresholdLevel::LOW;
 }
 }

@@ -8,6 +8,51 @@ namespace stellar
 {
 
 std::pair<TransactionEnvelope, LedgerKey>
+getWasmRestoreTx(PublicKey const& publicKey, SequenceNumber seqNum)
+{
+    TransactionEnvelope txEnv;
+    txEnv.type(ENVELOPE_TYPE_TX);
+
+    auto& tx = txEnv.v1().tx;
+    tx.sourceAccount = toMuxedAccount(publicKey);
+    tx.fee = 100'000'000;
+    tx.seqNum = seqNum;
+
+    Preconditions cond;
+    cond.type(PRECOND_NONE);
+    tx.cond = cond;
+
+    Memo memo;
+    memo.type(MEMO_NONE);
+    tx.memo = memo;
+
+    Operation restoreOp;
+    restoreOp.body.type(RESTORE_FOOTPRINT);
+
+    tx.operations.emplace_back(restoreOp);
+
+    auto const writeByteWasm = rust_bridge::get_write_bytes();
+    std::vector<uint8_t> wasm(writeByteWasm.data.begin(),
+                              writeByteWasm.data.end());
+
+    LedgerKey contractCodeLedgerKey;
+    contractCodeLedgerKey.type(CONTRACT_CODE);
+    contractCodeLedgerKey.contractCode().hash = sha256(wasm);
+
+    SorobanResources restoreResources;
+    restoreResources.footprint.readWrite = {contractCodeLedgerKey};
+    restoreResources.instructions = 0;
+    restoreResources.readBytes = 2000;
+    restoreResources.writeBytes = 2000;
+
+    tx.ext.v(1);
+    tx.ext.sorobanData().resources = restoreResources;
+    tx.ext.sorobanData().resourceFee = 55'000'000;
+
+    return {txEnv, contractCodeLedgerKey};
+}
+
+std::pair<TransactionEnvelope, LedgerKey>
 getUploadTx(PublicKey const& publicKey, SequenceNumber seqNum)
 {
     TransactionEnvelope txEnv;
@@ -15,7 +60,7 @@ getUploadTx(PublicKey const& publicKey, SequenceNumber seqNum)
 
     auto& tx = txEnv.v1().tx;
     tx.sourceAccount = toMuxedAccount(publicKey);
-    tx.fee = 10'000'000;
+    tx.fee = 100'000'000;
     tx.seqNum = seqNum;
 
     Preconditions cond;
@@ -49,7 +94,7 @@ getUploadTx(PublicKey const& publicKey, SequenceNumber seqNum)
 
     tx.ext.v(1);
     tx.ext.sorobanData().resources = uploadResources;
-    tx.ext.sorobanData().resourceFee = 4'000'000;
+    tx.ext.sorobanData().resourceFee = 55'000'000;
 
     return {txEnv, contractCodeLedgerKey};
 }
@@ -63,7 +108,7 @@ getCreateTx(PublicKey const& publicKey, LedgerKey const& contractCodeLedgerKey,
 
     auto& tx = txEnv.v1().tx;
     tx.sourceAccount = toMuxedAccount(publicKey);
-    tx.fee = 2'000'000;
+    tx.fee = 25'000'000;
     tx.seqNum = seqNum;
 
     Preconditions cond;
@@ -127,15 +172,40 @@ getCreateTx(PublicKey const& publicKey, LedgerKey const& contractCodeLedgerKey,
     SorobanResources uploadResources;
     uploadResources.footprint.readOnly = {contractCodeLedgerKey};
     uploadResources.footprint.readWrite = {contractSourceRefLedgerKey};
-    uploadResources.instructions = 150'000;
+    uploadResources.instructions = 2'000'000;
     uploadResources.readBytes = 2000;
     uploadResources.writeBytes = 120;
 
     tx.ext.v(1);
     tx.ext.sorobanData().resources = uploadResources;
-    tx.ext.sorobanData().resourceFee = 1'000'000;
+    tx.ext.sorobanData().resourceFee = 15'000'000;
 
     return {txEnv, contractSourceRefLedgerKey, contractID};
+}
+
+void
+validateConfigUpgradeSet(ConfigUpgradeSet const& upgradeSet)
+{
+    for (auto const& entry : upgradeSet.updatedEntry)
+    {
+        if (entry.configSettingID() == CONFIG_SETTING_CONTRACT_LEDGER_COST_V0)
+        {
+            if (entry.contractLedgerCost().bucketListWriteFeeGrowthFactor >
+                50'000)
+            {
+                throw std::runtime_error("Invalid contractLedgerCost");
+            }
+        }
+        else if (entry.configSettingID() == CONFIG_SETTING_STATE_ARCHIVAL)
+        {
+            // 1048576 is our current phase1 scan size, and we don't expect to
+            // go past this anytime soon.
+            if (entry.stateArchivalSettings().evictionScanSize > 1048576)
+            {
+                throw std::runtime_error("Invalid evictionScanSize");
+            }
+        }
+    }
 }
 
 std::pair<TransactionEnvelope, ConfigUpgradeSetKey>
@@ -144,12 +214,14 @@ getInvokeTx(PublicKey const& publicKey, LedgerKey const& contractCodeLedgerKey,
             ConfigUpgradeSet const& upgradeSet, SequenceNumber seqNum)
 {
 
+    validateConfigUpgradeSet(upgradeSet);
+
     TransactionEnvelope txEnv;
     txEnv.type(ENVELOPE_TYPE_TX);
 
     auto& tx = txEnv.v1().tx;
     tx.sourceAccount = toMuxedAccount(publicKey);
-    tx.fee = 1'000'000;
+    tx.fee = 100'000'000;
     tx.seqNum = seqNum;
 
     Preconditions cond;
@@ -195,12 +267,12 @@ getInvokeTx(PublicKey const& publicKey, LedgerKey const& contractCodeLedgerKey,
                                           contractCodeLedgerKey};
     invokeResources.footprint.readWrite = {upgrade};
     invokeResources.instructions = 2'000'000;
-    invokeResources.readBytes = 3000;
-    invokeResources.writeBytes = 2000;
+    invokeResources.readBytes = 3200;
+    invokeResources.writeBytes = 3200;
 
     tx.ext.v(1);
     tx.ext.sorobanData().resources = invokeResources;
-    tx.ext.sorobanData().resourceFee = 500'000;
+    tx.ext.sorobanData().resourceFee = 65'000'000;
 
     ConfigUpgradeSetKey key;
     key.contentHash = upgradeHash;

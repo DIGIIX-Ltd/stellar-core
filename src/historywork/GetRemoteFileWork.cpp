@@ -8,6 +8,7 @@
 #include "history/HistoryArchiveManager.h"
 #include "history/HistoryManager.h"
 #include "main/Application.h"
+#include "util/Fs.h"
 #include "util/GlobalChecks.h"
 #include "util/Logging.h"
 
@@ -22,6 +23,10 @@ GetRemoteFileWork::GetRemoteFileWork(Application& app,
     , mRemote(remote)
     , mLocal(local)
     , mArchive(archive)
+    , mFailuresPerSecond(
+          app.getMetrics().NewMeter({"history", "get", "failure"}, "failure"))
+    , mBytesPerSecond(
+          app.getMetrics().NewMeter({"history", "get", "throughput"}, "bytes"))
 {
 }
 
@@ -37,6 +42,7 @@ GetRemoteFileWork::getCommand()
     releaseAssert(mCurrentArchive);
     releaseAssert(mCurrentArchive->hasGetCmd());
     auto cmdLine = mCurrentArchive->getFileCmd(mRemote, mLocal);
+    CLOG_DEBUG(History, "Downloading file: cmd: {}", cmdLine);
 
     return CommandInfo{cmdLine, std::string()};
 }
@@ -52,6 +58,7 @@ void
 GetRemoteFileWork::onSuccess()
 {
     releaseAssert(mCurrentArchive);
+    mBytesPerSecond.Mark(fs::size(mLocal));
     RunCommandWork::onSuccess();
 }
 
@@ -59,9 +66,10 @@ void
 GetRemoteFileWork::onFailureRaise()
 {
     releaseAssert(mCurrentArchive);
-    CLOG_ERROR(History,
-               "Could not download file: archive {} maybe missing file {}",
-               mCurrentArchive->getName(), mRemote);
+    mFailuresPerSecond.Mark(1);
+    CLOG_WARNING(History,
+                 "Could not download file: archive {} maybe missing file {}",
+                 mCurrentArchive->getName(), mRemote);
     RunCommandWork::onFailureRaise();
 }
 

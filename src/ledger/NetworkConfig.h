@@ -31,7 +31,7 @@ struct MinimumSorobanNetworkConfig
     static constexpr uint32_t TX_MAX_INSTRUCTIONS = 2'500'000;
     static constexpr uint32_t MEMORY_LIMIT = 2'000'000;
 
-    static constexpr uint32_t MAX_CONTRACT_DATA_KEY_SIZE_BYTES = 300;
+    static constexpr uint32_t MAX_CONTRACT_DATA_KEY_SIZE_BYTES = 200;
     static constexpr uint32_t MAX_CONTRACT_DATA_ENTRY_SIZE_BYTES = 2'000;
     static constexpr uint32_t MAX_CONTRACT_SIZE = 2'000;
 
@@ -41,6 +41,7 @@ struct MinimumSorobanNetworkConfig
     static constexpr int64_t RENT_RATE_DENOMINATOR = INT64_MAX;
     static constexpr uint32_t MAX_ENTRIES_TO_ARCHIVE = 0;
     static constexpr uint32_t BUCKETLIST_SIZE_WINDOW_SAMPLE_SIZE = 1;
+    static constexpr uint32_t BUCKETLIST_WINDOW_SAMPLE_PERIOD = 1;
     static constexpr uint32_t EVICTION_SCAN_SIZE = 0;
     static constexpr uint32_t STARTING_EVICTION_LEVEL = 1;
 
@@ -97,8 +98,9 @@ struct InitialSorobanNetworkConfig
     // No growth fee initially to make sure fees are accessible
     static constexpr uint32_t BUCKET_LIST_WRITE_FEE_GROWTH_FACTOR = 1;
 
-    static constexpr uint64_t BUCKET_LIST_SIZE_WINDOW_SAMPLE_SIZE =
-        30; // 30 day average
+    static constexpr uint64_t BUCKET_LIST_SIZE_WINDOW_SAMPLE_SIZE = 30;
+
+    static constexpr uint32_t BUCKET_LIST_WINDOW_SAMPLE_PERIOD = 64;
 
     // Historical data settings
     static constexpr int64_t FEE_HISTORICAL_1KB = 100;
@@ -136,6 +138,9 @@ struct InitialSorobanNetworkConfig
 
     // General execution settings
     static constexpr uint32_t LEDGER_MAX_TX_COUNT = 1;
+
+    // Parallel execution settings
+    static constexpr uint32_t LEDGER_MAX_DEPENDENT_TX_CLUSTERS = 1;
 };
 
 // Defines the subset of the `InitialSorobanNetworkConfig` to be overridden for
@@ -208,6 +213,19 @@ class SorobanNetworkConfig
     // upgrade.
     static void createLedgerEntriesForV20(AbstractLedgerTxn& ltx,
                                           Application& app);
+
+    // Creates the new cost types introduced in v21.
+    // This should happen once during the correspondent protocol version
+    // upgrade.
+    static void createCostTypesForV21(AbstractLedgerTxn& ltx, Application& app);
+
+    // Creates the new cost types introduced in v22.
+    // This should happen once during the correspondent protocol version
+    // upgrade.
+    static void createCostTypesForV22(AbstractLedgerTxn& ltx, Application& app);
+
+    static void createLedgerEntriesForV23(AbstractLedgerTxn& ltx,
+                                          Application& app);
     // Test-only function that initializes contract network configuration
     // bypassing the normal upgrade process (i.e. when genesis ledger starts not
     // at v1)
@@ -260,6 +278,11 @@ class SorobanNetworkConfig
     int64_t feeRead1KB() const;
     // Fee for writing 1KB
     int64_t feeWrite1KB() const;
+    // Bucket list target size (in bytes)
+    int64_t bucketListTargetSizeBytes() const;
+    int64_t writeFee1KBBucketListLow() const;
+    int64_t writeFee1KBBucketListHigh() const;
+    uint32_t bucketListWriteFeeGrowthFactor() const;
 
     // Historical data (pushed to core archives) settings for contracts.
     // Fee for storing 1KB in archives
@@ -282,9 +305,6 @@ class SorobanNetworkConfig
     // General execution ledger settings
     uint32_t ledgerMaxTxCount() const;
 
-    // Number of samples in sliding window
-    uint32_t getBucketListSizeSnapshotPeriod() const;
-
     // If currLedger is a ledger when we should snapshot, add a new snapshot to
     // the sliding window and write it to disk.
     void maybeSnapshotBucketListSize(uint32_t currLedger,
@@ -294,19 +314,19 @@ class SorobanNetworkConfig
     // window.
     uint64_t getAverageBucketListSize() const;
 
-#ifdef BUILD_TESTS
-    void setBucketListSnapshotPeriodForTesting(uint32_t period);
-#endif
-
-    static bool isValidConfigSettingEntry(ConfigSettingEntry const& cfg);
+    static bool isValidConfigSettingEntry(ConfigSettingEntry const& cfg,
+                                          uint32_t ledgerVersion);
     static bool
     isNonUpgradeableConfigSettingEntry(ConfigSettingEntry const& cfg);
+
+    static bool isNonUpgradeableConfigSettingEntry(ConfigSettingID const& cfg);
 
     // Cost model parameters of the Soroban host
     ContractCostParams const& cpuCostParams() const;
     ContractCostParams const& memCostParams() const;
 
-    static bool isValidCostParams(ContractCostParams const& params);
+    static bool isValidCostParams(ContractCostParams const& params,
+                                  uint32_t ledgerVersion);
 
     CxxFeeConfiguration rustBridgeFeeConfiguration() const;
     CxxRentFeeConfiguration rustBridgeRentFeeConfiguration() const;
@@ -317,15 +337,26 @@ class SorobanNetworkConfig
 
     void updateEvictionIterator(AbstractLedgerTxn& ltxRoot,
                                 EvictionIterator const& newIter) const;
+
+    // Parallel execution settings
+    uint32_t ledgerMaxDependentTxClusters() const;
+
 #ifdef BUILD_TESTS
     StateArchivalSettings& stateArchivalSettings();
     EvictionIterator& evictionIterator();
+    // Update the protocol 20 cost types to match the real network
+    // configuration.
+    // Protocol 20 cost types were imprecise and were re-calibrated shortly
+    // after the release. This should be called when initializing the test with
+    // protocol 20+.
+    // Future recalibrations should be accounted for in a similar way in order
+    // to have more accurage modelled CPU and memory costs in tests and
+    // especially the benchmarks.
+    static void updateRecalibratedCostTypesForV20(AbstractLedgerTxn& ltx);
 #endif
+    bool operator==(SorobanNetworkConfig const& other) const;
 
   private:
-    static constexpr uint32_t BUCKETLIST_SIZE_SNAPSHOT_PERIOD =
-        17280; // 1 day, in ledgers
-
     void loadMaxContractSize(AbstractLedgerTxn& ltx);
     void loadMaxContractDataKeySize(AbstractLedgerTxn& ltx);
     void loadMaxContractDataEntrySize(AbstractLedgerTxn& ltx);
@@ -340,6 +371,7 @@ class SorobanNetworkConfig
     void loadExecutionLanesSettings(AbstractLedgerTxn& ltx);
     void loadBucketListSizeWindow(AbstractLedgerTxn& ltx);
     void loadEvictionIterator(AbstractLedgerTxn& ltx);
+    void loadParallelComputeConfig(AbstractLedgerTxn& ltx);
     void computeWriteFee(uint32_t configMaxProtocol, uint32_t protocolVersion);
     // If newSize is different than the current BucketList size sliding window,
     // update the window. If newSize < currSize, pop entries off window. If
@@ -404,13 +436,7 @@ class SorobanNetworkConfig
 
     // FIFO queue, push_back/pop_front
     std::deque<uint64_t> mBucketListSizeSnapshots;
-    uint64_t mAverageBucketListSize{0};
-
-#ifdef BUILD_TESTS
-    std::optional<uint32_t> mBucketListSnapshotPeriodForTesting;
-
-    void writeAllSettings(AbstractLedgerTxn& ltx) const;
-#endif
+    uint64_t mAverageBucketListSize{};
 
     // Host cost params
     ContractCostParams mCpuCostParams{};
@@ -419,6 +445,13 @@ class SorobanNetworkConfig
     // State archival settings
     StateArchivalSettings mStateArchivalSettings{};
     mutable EvictionIterator mEvictionIterator{};
+
+    // Parallel execution settings
+    uint32_t mLedgerMaxDependentTxClusters{};
+
+#ifdef BUILD_TESTS
+    void writeAllSettings(AbstractLedgerTxn& ltx, Application& app) const;
+#endif
 };
 
 }

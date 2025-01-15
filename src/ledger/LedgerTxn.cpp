@@ -3,26 +3,27 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 #include "ledger/LedgerTxn.h"
-#include "bucket/BucketList.h"
 #include "bucket/BucketManager.h"
-#include "crypto/Hex.h"
+#include "bucket/SearchableBucketList.h"
 #include "crypto/KeyUtils.h"
-#include "crypto/SecretKey.h"
 #include "database/Database.h"
 #include "ledger/LedgerRange.h"
 #include "ledger/LedgerTxnEntry.h"
 #include "ledger/LedgerTxnHeader.h"
 #include "ledger/LedgerTxnImpl.h"
+#include "ledger/LedgerTypeUtils.h"
 #include "ledger/NonSociRelatedException.h"
 #include "main/Application.h"
 #include "transactions/TransactionUtils.h"
 #include "util/GlobalChecks.h"
-#include "util/XDROperators.h"
+#include "util/UnorderedSet.h"
 #include "util/types.h"
 #include "xdr/Stellar-ledger-entries.h"
-#include "xdrpp/marshal.h"
 #include <Tracy.hpp>
 #include <soci.h>
+
+#include <algorithm>
+#include <stdexcept>
 
 namespace stellar
 {
@@ -167,45 +168,86 @@ LedgerEntryPtr::isDeleted() const
 {
     return mState == EntryPtrState::DELETED;
 }
-
-template <typename KeySetT>
-UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-populateLoadedEntries(KeySetT const& keys,
-                      std::vector<LedgerEntry> const& entries)
+bool
+LedgerKeyMeter::canLoad(LedgerKey const& key, size_t entrySizeBytes) const
 {
-    UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>> res;
-
-    for (auto const& le : entries)
-    {
-        auto key = LedgerEntryKey(le);
-
-        // Abort if two entries for the same key appear.
-        releaseAssert(res.find(key) == res.end());
-
-        // Only return entries for keys that were actually requested.
-        if (keys.find(key) != keys.end())
-        {
-            res.emplace(key, std::make_shared<LedgerEntry const>(le));
-        }
-    }
-
-    for (auto const& key : keys)
-    {
-        if (res.find(key) == res.end())
-        {
-            res.emplace(key, nullptr);
-        }
-    }
-    return res;
+    return maxReadQuotaForKey(key) >= entrySizeBytes;
 }
 
-template UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-populateLoadedEntries(LedgerKeySet const& keys,
-                      std::vector<LedgerEntry> const& entries);
+void
+LedgerKeyMeter::addTxn(SorobanResources const& resources)
+{
+    TxReadBytesPtr txReadBytesPtr =
+        std::make_shared<uint32_t>(resources.readBytes);
+    auto addKeyToTxnMap = [&](auto const& key) {
+        mLedgerKeyToTxReadBytes[key].emplace_back(txReadBytesPtr);
+    };
+    std::for_each(resources.footprint.readOnly.begin(),
+                  resources.footprint.readOnly.end(), addKeyToTxnMap);
+    std::for_each(resources.footprint.readWrite.begin(),
+                  resources.footprint.readWrite.end(), addKeyToTxnMap);
+}
 
-template UnorderedMap<LedgerKey, std::shared_ptr<LedgerEntry const>>
-populateLoadedEntries(UnorderedSet<LedgerKey> const& keys,
-                      std::vector<LedgerEntry> const& entries);
+void
+LedgerKeyMeter::updateReadQuotasForKey(LedgerKey const& key,
+                                       size_t entrySizeBytes)
+{
+    auto iter = mLedgerKeyToTxReadBytes.find(key);
+    if (iter == mLedgerKeyToTxReadBytes.end())
+    {
+        // Key does not belong to the footprint of any transaction.
+        // Ensure this is not a soroban key as they should always be metered.
+        releaseAssert(key.type() != CONTRACT_CODE &&
+                      key.type() != CONTRACT_DATA);
+        return;
+    }
+    // Update the read quota for every transaction containing this key.
+    bool exceedsQuotaForAllTxns = true;
+    for (TxReadBytesPtr txReadBytesPtr : iter->second)
+    {
+        if (*txReadBytesPtr < entrySizeBytes)
+        {
+            *txReadBytesPtr = 0;
+        }
+        else
+        {
+            exceedsQuotaForAllTxns = false;
+            *txReadBytesPtr -= entrySizeBytes;
+        }
+    }
+    if (exceedsQuotaForAllTxns)
+    {
+        mNotLoadedKeys.insert(key);
+    }
+}
+
+uint32_t
+LedgerKeyMeter::maxReadQuotaForKey(LedgerKey const& key) const
+{
+    auto iter = mLedgerKeyToTxReadBytes.find(key);
+    if (iter == mLedgerKeyToTxReadBytes.end())
+    {
+        // Key does not belong to the footprint of any transaction,
+        // therefore it is not quota-limited.
+        // Ensure this is not a soroban key as they should always be metered.
+        releaseAssert(key.type() != CONTRACT_CODE &&
+                      key.type() != CONTRACT_DATA);
+        return std::numeric_limits<uint32_t>::max();
+    }
+    return **std::max_element(
+        iter->second.begin(), iter->second.end(),
+        [&](TxReadBytesPtr a, TxReadBytesPtr b) { return *a < *b; });
+}
+
+bool
+LedgerKeyMeter::loadFailed(LedgerKey const& key) const
+{
+    if (mNotLoadedKeys.find(key) != mNotLoadedKeys.end())
+    {
+        return true;
+    }
+    return false;
+}
 
 bool
 operator==(OfferDescriptor const& lhs, OfferDescriptor const& rhs)
@@ -461,14 +503,16 @@ LedgerTxn::Impl::commit() noexcept
     maybeUpdateLastModifiedThenInvokeThenSeal([&](EntryMap const& entries) {
         // getEntryIterator has the strong exception safety guarantee
         // commitChild has the strong exception safety guarantee
-        mParent.commitChild(getEntryIterator(entries), mConsistency);
+        mParent.commitChild(getEntryIterator(entries), mRestoredKeys,
+                            mConsistency);
     });
 }
 
 void
-LedgerTxn::commitChild(EntryIterator iter, LedgerTxnConsistency cons) noexcept
+LedgerTxn::commitChild(EntryIterator iter, RestoredKeys const& restoredKeys,
+                       LedgerTxnConsistency cons) noexcept
 {
-    getImpl()->commitChild(std::move(iter), cons);
+    getImpl()->commitChild(std::move(iter), restoredKeys, cons);
 }
 
 static LedgerTxnConsistency
@@ -487,6 +531,7 @@ joinConsistencyLevels(LedgerTxnConsistency c1, LedgerTxnConsistency c2)
 
 void
 LedgerTxn::Impl::commitChild(EntryIterator iter,
+                             RestoredKeys const& restoredKeys,
                              LedgerTxnConsistency cons) noexcept
 {
     // Assignment of xdrpp objects does not have the strong exception safety
@@ -590,6 +635,24 @@ LedgerTxn::Impl::commitChild(EntryIterator iter,
     catch (...)
     {
         printErrorAndAbort("unknown fatal error during commit to LedgerTxn");
+    }
+
+    for (auto const& key : restoredKeys.hotArchive)
+    {
+        auto [_, inserted] = mRestoredKeys.hotArchive.emplace(key);
+        if (!inserted)
+        {
+            printErrorAndAbort("restored hot archive entry already exists");
+        }
+    }
+
+    for (auto const& key : restoredKeys.liveBucketList)
+    {
+        auto [_, inserted] = mRestoredKeys.liveBucketList.emplace(key);
+        if (!inserted)
+        {
+            printErrorAndAbort("restored live BucketList entry already exists");
+        }
     }
 
     // std::unique_ptr<...>::swap does not throw
@@ -760,6 +823,91 @@ LedgerTxn::Impl::erase(InternalLedgerKey const& key)
     {
         mActive.erase(activeIter);
     }
+}
+
+void
+LedgerTxn::restoreFromHotArchive(LedgerEntry const& entry, uint32_t ttl)
+{
+    getImpl()->restoreFromHotArchive(*this, entry, ttl);
+}
+
+void
+LedgerTxn::Impl::restoreFromHotArchive(LedgerTxn& self,
+                                       LedgerEntry const& entry, uint32_t ttl)
+{
+    throwIfSealed();
+    throwIfChild();
+
+    if (!isPersistentEntry(entry.data))
+    {
+        throw std::runtime_error("Key type not supported in Hot Archive");
+    }
+    auto ttlKey = getTTLKey(entry);
+
+    // Restore entry by creating it on the live BucketList
+    create(self, entry);
+
+    // Also create the corresponding TTL entry
+    LedgerEntry ttlEntry;
+    ttlEntry.data.type(TTL);
+    ttlEntry.data.ttl().liveUntilLedgerSeq = ttl;
+    ttlEntry.data.ttl().keyHash = ttlKey.ttl().keyHash;
+    create(self, ttlEntry);
+
+    // Mark the keys as restored
+    auto addKey = [this](LedgerKey const& key) {
+        auto [_, inserted] = mRestoredKeys.hotArchive.insert(key);
+        if (!inserted)
+        {
+            throw std::runtime_error("Key already removed from hot archive");
+        }
+    };
+    addKey(LedgerEntryKey(entry));
+    addKey(ttlKey);
+}
+
+void
+LedgerTxn::restoreFromLiveBucketList(LedgerKey const& key, uint32_t ttl)
+{
+    getImpl()->restoreFromLiveBucketList(*this, key, ttl);
+}
+
+void
+LedgerTxn::Impl::restoreFromLiveBucketList(LedgerTxn& self,
+                                           LedgerKey const& key, uint32_t ttl)
+{
+    throwIfSealed();
+    throwIfChild();
+
+    if (!isPersistentEntry(key))
+    {
+        throw std::runtime_error("Key type not supported for restoration");
+    }
+
+    auto ttlKey = getTTLKey(key);
+
+    // Note: key should have already been loaded via loadWithoutRecord by
+    // caller, so this read should already be in the cache.
+    auto ttlLtxe = load(self, ttlKey);
+    if (!ttlLtxe)
+    {
+        throw std::runtime_error("Entry restored from live BucketList but does "
+                                 "not exist in the live BucketList.");
+    }
+
+    ttlLtxe.current().data.ttl().liveUntilLedgerSeq = ttl;
+
+    // Mark the keys as restored
+    auto addKey = [this](LedgerKey const& key) {
+        auto [_, inserted] = mRestoredKeys.liveBucketList.insert(key);
+        if (!inserted)
+        {
+            throw std::runtime_error(
+                "Key already restored from Live BucketList");
+        }
+    };
+    addKey(key);
+    addKey(ttlKey);
 }
 
 void
@@ -1430,6 +1578,53 @@ LedgerTxn::Impl::getAllEntries(std::vector<LedgerEntry>& initEntries,
     deadEntries.swap(resDead);
 }
 
+UnorderedSet<LedgerKey> const&
+LedgerTxn::getRestoredHotArchiveKeys() const
+{
+    return getImpl()->getRestoredHotArchiveKeys();
+}
+
+UnorderedSet<LedgerKey> const&
+LedgerTxn::Impl::getRestoredHotArchiveKeys() const
+{
+    return mRestoredKeys.hotArchive;
+}
+
+UnorderedSet<LedgerKey> const&
+LedgerTxn::getRestoredLiveBucketListKeys() const
+{
+    return getImpl()->getRestoredLiveBucketListKeys();
+}
+
+UnorderedSet<LedgerKey> const&
+LedgerTxn::Impl::getRestoredLiveBucketListKeys() const
+{
+    return mRestoredKeys.liveBucketList;
+}
+
+LedgerKeySet
+LedgerTxn::getAllTTLKeysWithoutSealing() const
+{
+    return getImpl()->getAllTTLKeysWithoutSealing();
+}
+
+LedgerKeySet
+LedgerTxn::Impl::getAllTTLKeysWithoutSealing() const
+{
+    throwIfNotExactConsistency();
+    LedgerKeySet result;
+    for (auto const& [k, v] : mEntry)
+    {
+        if (k.type() == InternalLedgerEntryType::LEDGER_ENTRY &&
+            k.ledgerKey().type() == TTL)
+        {
+            result.emplace(k.ledgerKey());
+        }
+    }
+
+    return result;
+}
+
 std::shared_ptr<InternalLedgerEntry const>
 LedgerTxn::getNewestVersion(InternalLedgerKey const& key) const
 {
@@ -1894,6 +2089,8 @@ LedgerTxn::Impl::rollback() noexcept
     }
 
     mEntry.clear();
+    mRestoredKeys.hotArchive.clear();
+    mRestoredKeys.liveBucketList.clear();
     mMultiOrderBook.clear();
     mActive.clear();
     mActiveHeader.reset();
@@ -1939,83 +2136,22 @@ LedgerTxn::Impl::unsealHeader(LedgerTxn& self,
 }
 
 uint64_t
-LedgerTxn::countObjects(LedgerEntryType let) const
+LedgerTxn::countOffers(LedgerRange const& ledgers) const
 {
-    throw std::runtime_error("called countObjects on non-root LedgerTxn");
-}
-
-uint64_t
-LedgerTxn::countObjects(LedgerEntryType let, LedgerRange const& ledgers) const
-{
-    throw std::runtime_error("called countObjects on non-root LedgerTxn");
+    throw std::runtime_error("called countOffers on non-root LedgerTxn");
 }
 
 void
-LedgerTxn::deleteObjectsModifiedOnOrAfterLedger(uint32_t ledger) const
+LedgerTxn::deleteOffersModifiedOnOrAfterLedger(uint32_t ledger) const
 {
     throw std::runtime_error(
-        "called deleteObjectsModifiedOnOrAfterLedger on non-root LedgerTxn");
+        "called deleteOffersModifiedOnOrAfterLedger on non-root LedgerTxn");
 }
 
 void
-LedgerTxn::dropAccounts(bool rebuild)
-{
-    throw std::runtime_error("called dropAccounts on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropData(bool rebuild)
-{
-    throw std::runtime_error("called dropData on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropOffers(bool rebuild)
+LedgerTxn::dropOffers()
 {
     throw std::runtime_error("called dropOffers on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropTrustLines(bool rebuild)
-{
-    throw std::runtime_error("called dropTrustLines on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropClaimableBalances(bool rebuild)
-{
-    throw std::runtime_error(
-        "called dropClaimableBalances on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropLiquidityPools(bool rebuild)
-{
-    throw std::runtime_error("called dropLiquidityPools on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropContractData(bool rebuild)
-{
-    throw std::runtime_error("called dropContractData on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropContractCode(bool rebuild)
-{
-    throw std::runtime_error("called dropContractCode on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropConfigSettings(bool rebuild)
-{
-    throw std::runtime_error("called dropConfigSettings on non-root LedgerTxn");
-}
-
-void
-LedgerTxn::dropTTL(bool rebuild)
-{
-    throw std::runtime_error("called dropTTL on non-root LedgerTxn");
 }
 
 double
@@ -2039,15 +2175,28 @@ LedgerTxn::Impl::getPrefetchHitRate() const
 }
 
 uint32_t
-LedgerTxn::prefetch(UnorderedSet<LedgerKey> const& keys)
+LedgerTxn::prefetchClassic(UnorderedSet<LedgerKey> const& keys)
 {
-    return getImpl()->prefetch(keys);
+    return getImpl()->prefetchClassic(keys);
+}
+uint32_t
+LedgerTxn::prefetchSoroban(UnorderedSet<LedgerKey> const& keys,
+                           LedgerKeyMeter* lkMeter)
+{
+    return getImpl()->prefetchSoroban(keys, lkMeter);
 }
 
 uint32_t
-LedgerTxn::Impl::prefetch(UnorderedSet<LedgerKey> const& keys)
+LedgerTxn::Impl::prefetchClassic(UnorderedSet<LedgerKey> const& keys)
 {
-    return mParent.prefetch(keys);
+    return mParent.prefetchClassic(keys);
+}
+
+uint32_t
+LedgerTxn::Impl::prefetchSoroban(UnorderedSet<LedgerKey> const& keys,
+                                 LedgerKeyMeter* lkMeter)
+{
+    return mParent.prefetchSoroban(keys, lkMeter);
 }
 
 void
@@ -2309,6 +2458,13 @@ LedgerTxn::Impl::hasSponsorshipEntry() const
     return false;
 }
 
+SessionWrapper&
+LedgerTxn::getSession() const
+{
+    throw std::runtime_error("LedgerTxn::getSession illegal call, can only be "
+                             "called on LedgerTxnRoot");
+}
+
 void
 LedgerTxn::prepareNewObjects(size_t s)
 {
@@ -2462,6 +2618,22 @@ LedgerTxnRoot::Impl::~Impl()
     }
 }
 
+SessionWrapper&
+LedgerTxnRoot::Impl::getSession() const
+{
+    if (mSession)
+    {
+        return *mSession;
+    }
+    return mApp.getDatabase().getSession();
+}
+
+SessionWrapper&
+LedgerTxnRoot::getSession() const
+{
+    return mImpl->getSession();
+}
+
 #ifdef BUILD_TESTS
 void
 LedgerTxnRoot::Impl::resetForFuzzer()
@@ -2493,14 +2665,19 @@ LedgerTxnRoot::Impl::addChild(AbstractLedgerTxn& child, TransactionMode mode)
 
     if (mode == TransactionMode::READ_WRITE_WITH_SQL_TXN)
     {
-        mTransaction = std::make_unique<soci::transaction>(
-            mApp.getDatabase().getSession());
+        if (mApp.getConfig().parallelLedgerClose())
+        {
+            mSession = std::make_unique<SessionWrapper>(
+                "ledgerClose", mApp.getDatabase().getPool());
+        }
+        mTransaction =
+            std::make_unique<soci::transaction>(getSession().session());
     }
     else
     {
         // Read-only transactions are only allowed on the main thread to ensure
         // we're not competing with writes
-        assertThreadIsMain();
+        releaseAssert(threadIsMain());
     }
 
     mChild = &child;
@@ -2516,10 +2693,10 @@ LedgerTxnRoot::Impl::throwIfChild() const
 }
 
 void
-LedgerTxnRoot::commitChild(EntryIterator iter,
+LedgerTxnRoot::commitChild(EntryIterator iter, RestoredKeys const& restoredKeys,
                            LedgerTxnConsistency cons) noexcept
 {
-    mImpl->commitChild(std::move(iter), cons);
+    mImpl->commitChild(std::move(iter), restoredKeys, cons);
 }
 
 static void
@@ -2534,8 +2711,7 @@ accum(EntryIterator const& iter, std::vector<EntryIterator>& upsertBuffer,
 
 // Return true only if something is actually accumulated and not skipped over
 bool
-BulkLedgerEntryChangeAccumulator::accumulate(EntryIterator const& iter,
-                                             bool bucketListDBEnabled)
+BulkLedgerEntryChangeAccumulator::accumulate(EntryIterator const& iter)
 {
     // Right now, only LEDGER_ENTRY are recorded in the SQL database
     if (iter.key().type() != InternalLedgerEntryType::LEDGER_ENTRY)
@@ -2543,55 +2719,15 @@ BulkLedgerEntryChangeAccumulator::accumulate(EntryIterator const& iter,
         return false;
     }
 
-    // Don't accumulate entry types that are supported by BucketListDB when it
-    // is enabled
+    // Don't accumulate entry types that are supported by BucketListDB
     auto type = iter.key().ledgerKey().type();
-    if (bucketListDBEnabled && !BucketIndex::typeNotSupported(type))
+    if (!BucketIndex::typeNotSupported(type))
     {
         return false;
     }
 
-    switch (type)
-    {
-    case ACCOUNT:
-        accum(iter, mAccountsToUpsert, mAccountsToDelete);
-        break;
-    case TRUSTLINE:
-        accum(iter, mTrustLinesToUpsert, mTrustLinesToDelete);
-        break;
-    case OFFER:
-        accum(iter, mOffersToUpsert, mOffersToDelete);
-        break;
-    case DATA:
-        accum(iter, mAccountDataToUpsert, mAccountDataToDelete);
-        break;
-    case CLAIMABLE_BALANCE:
-        accum(iter, mClaimableBalanceToUpsert, mClaimableBalanceToDelete);
-        break;
-    case LIQUIDITY_POOL:
-        accum(iter, mLiquidityPoolToUpsert, mLiquidityPoolToDelete);
-        break;
-    case CONTRACT_DATA:
-        accum(iter, mContractDataToUpsert, mContractDataToDelete);
-        break;
-    case CONTRACT_CODE:
-        accum(iter, mContractCodeToUpsert, mContractCodeToDelete);
-        break;
-    case CONFIG_SETTING:
-    {
-        // Configuration can not be deleted.
-        releaseAssert(iter.entryExists());
-        std::vector<EntryIterator> emptyEntries;
-        accum(iter, mConfigSettingsToUpsert, emptyEntries);
-        break;
-    }
-    case TTL:
-        accum(iter, mTTLToUpsert, mTTLToDelete);
-        break;
-    default:
-        abort();
-    }
-
+    releaseAssertOrThrow(type == OFFER);
+    accum(iter, mOffersToUpsert, mOffersToDelete);
     return true;
 }
 
@@ -2600,30 +2736,7 @@ LedgerTxnRoot::Impl::bulkApply(BulkLedgerEntryChangeAccumulator& bleca,
                                size_t bufferThreshold,
                                LedgerTxnConsistency cons)
 {
-    auto& upsertAccounts = bleca.getAccountsToUpsert();
-    if (upsertAccounts.size() > bufferThreshold)
-    {
-        bulkUpsertAccounts(upsertAccounts);
-        upsertAccounts.clear();
-    }
-    auto& deleteAccounts = bleca.getAccountsToDelete();
-    if (deleteAccounts.size() > bufferThreshold)
-    {
-        bulkDeleteAccounts(deleteAccounts, cons);
-        deleteAccounts.clear();
-    }
-    auto& upsertTrustLines = bleca.getTrustLinesToUpsert();
-    if (upsertTrustLines.size() > bufferThreshold)
-    {
-        bulkUpsertTrustLines(upsertTrustLines);
-        upsertTrustLines.clear();
-    }
-    auto& deleteTrustLines = bleca.getTrustLinesToDelete();
-    if (deleteTrustLines.size() > bufferThreshold)
-    {
-        bulkDeleteTrustLines(deleteTrustLines, cons);
-        deleteTrustLines.clear();
-    }
+
     auto& upsertOffers = bleca.getOffersToUpsert();
     if (upsertOffers.size() > bufferThreshold)
     {
@@ -2636,91 +2749,11 @@ LedgerTxnRoot::Impl::bulkApply(BulkLedgerEntryChangeAccumulator& bleca,
         bulkDeleteOffers(deleteOffers, cons);
         deleteOffers.clear();
     }
-    auto& upsertAccountData = bleca.getAccountDataToUpsert();
-    if (upsertAccountData.size() > bufferThreshold)
-    {
-        bulkUpsertAccountData(upsertAccountData);
-        upsertAccountData.clear();
-    }
-    auto& deleteAccountData = bleca.getAccountDataToDelete();
-    if (deleteAccountData.size() > bufferThreshold)
-    {
-        bulkDeleteAccountData(deleteAccountData, cons);
-        deleteAccountData.clear();
-    }
-    auto& upsertClaimableBalance = bleca.getClaimableBalanceToUpsert();
-    if (upsertClaimableBalance.size() > bufferThreshold)
-    {
-        bulkUpsertClaimableBalance(upsertClaimableBalance);
-        upsertClaimableBalance.clear();
-    }
-    auto& deleteClaimableBalance = bleca.getClaimableBalanceToDelete();
-    if (deleteClaimableBalance.size() > bufferThreshold)
-    {
-        bulkDeleteClaimableBalance(deleteClaimableBalance, cons);
-        deleteClaimableBalance.clear();
-    }
-    auto& upsertLiquidityPool = bleca.getLiquidityPoolToUpsert();
-    if (upsertLiquidityPool.size() > bufferThreshold)
-    {
-        bulkUpsertLiquidityPool(upsertLiquidityPool);
-        upsertLiquidityPool.clear();
-    }
-    auto& deleteLiquidityPool = bleca.getLiquidityPoolToDelete();
-    if (deleteLiquidityPool.size() > bufferThreshold)
-    {
-        bulkDeleteLiquidityPool(deleteLiquidityPool, cons);
-        deleteLiquidityPool.clear();
-    }
-    auto& upsertConfigSettings = bleca.getConfigSettingsToUpsert();
-    if (upsertConfigSettings.size() > bufferThreshold)
-    {
-        bulkUpsertConfigSettings(upsertConfigSettings);
-        upsertConfigSettings.clear();
-    }
-    auto& upsertContractData = bleca.getContractDataToUpsert();
-    if (upsertContractData.size() > bufferThreshold)
-    {
-        bulkUpsertContractData(upsertContractData);
-        upsertContractData.clear();
-    }
-    auto& deleteContractData = bleca.getContractDataToDelete();
-    if (deleteContractData.size() > bufferThreshold)
-    {
-        bulkDeleteContractData(deleteContractData, cons);
-        deleteContractData.clear();
-    }
-
-    auto& upsertContractCode = bleca.getContractCodeToUpsert();
-    if (upsertContractCode.size() > bufferThreshold)
-    {
-        bulkUpsertContractCode(upsertContractCode);
-        upsertContractCode.clear();
-    }
-    auto& deleteContractCode = bleca.getContractCodeToDelete();
-    if (deleteContractCode.size() > bufferThreshold)
-    {
-        bulkDeleteContractCode(deleteContractCode, cons);
-        deleteContractCode.clear();
-    }
-
-    auto& upsertTTL = bleca.getTTLToUpsert();
-    if (upsertTTL.size() > bufferThreshold)
-    {
-        bulkUpsertTTL(upsertTTL);
-        upsertTTL.clear();
-    }
-
-    auto& deleteTTL = bleca.getTTLToDelete();
-    if (deleteTTL.size() > bufferThreshold)
-    {
-        bulkDeleteTTL(deleteTTL, cons);
-        deleteTTL.clear();
-    }
 }
 
 void
 LedgerTxnRoot::Impl::commitChild(EntryIterator iter,
+                                 RestoredKeys const& restoredHotArchiveKeys,
                                  LedgerTxnConsistency cons) noexcept
 {
     ZoneScoped;
@@ -2738,14 +2771,13 @@ LedgerTxnRoot::Impl::commitChild(EntryIterator iter,
     // guarantee, so use std::unique_ptr<...>::swap to achieve it
     auto childHeader = std::make_unique<LedgerHeader>(mChild->getHeader());
 
-    auto bucketListDBEnabled = mApp.getConfig().isUsingBucketListDB();
     auto bleca = BulkLedgerEntryChangeAccumulator();
     [[maybe_unused]] int64_t counter{0};
     try
     {
         while ((bool)iter)
         {
-            if (bleca.accumulate(iter, bucketListDBEnabled))
+            if (bleca.accumulate(iter))
             {
                 ++counter;
             }
@@ -2763,7 +2795,7 @@ LedgerTxnRoot::Impl::commitChild(EntryIterator iter,
         // committing; on postgres this doesn't matter but on SQLite the passive
         // WAL-auto-checkpointing-at-commit behaviour will starve if there are
         // still prepared statements open at commit time.
-        mApp.getDatabase().clearPreparedStatementCache();
+        mApp.getDatabase().clearPreparedStatementCache(getSession());
         ZoneNamedN(commitZone, "SOCI commit", true);
         mTransaction->commit();
     }
@@ -2784,6 +2816,7 @@ LedgerTxnRoot::Impl::commitChild(EntryIterator iter,
 
     // std::unique_ptr<...>::reset does not throw
     mTransaction.reset();
+    mSession.reset();
 
     // std::unique_ptr<...>::swap does not throw
     mHeader.swap(childHeader);
@@ -2791,174 +2824,95 @@ LedgerTxnRoot::Impl::commitChild(EntryIterator iter,
 
     mPrefetchHits = 0;
     mPrefetchMisses = 0;
-}
 
-std::string
-LedgerTxnRoot::Impl::tableFromLedgerEntryType(LedgerEntryType let)
-{
-    switch (let)
-    {
-    case ACCOUNT:
-        return "accounts";
-    case DATA:
-        return "accountdata";
-    case OFFER:
-        return "offers";
-    case TRUSTLINE:
-        return "trustlines";
-    case CLAIMABLE_BALANCE:
-        return "claimablebalance";
-    case LIQUIDITY_POOL:
-        return "liquiditypool";
-    case CONTRACT_DATA:
-        return "contractdata";
-    case CONTRACT_CODE:
-        return "contractcode";
-    case CONFIG_SETTING:
-        return "configsettings";
-    case TTL:
-        return "ttl";
-    default:
-        throw std::runtime_error("Unknown ledger entry type");
-    }
+    // std::shared_ptr<...>::reset does not throw
+    mSearchableBucketListSnapshot.reset();
 }
 
 uint64_t
-LedgerTxnRoot::countObjects(LedgerEntryType let) const
+LedgerTxnRoot::countOffers(LedgerRange const& ledgers) const
 {
-    return mImpl->countObjects(let);
+    return mImpl->countOffers(ledgers);
 }
 
 uint64_t
-LedgerTxnRoot::Impl::countObjects(LedgerEntryType let) const
+LedgerTxnRoot::Impl::countOffers(LedgerRange const& ledgers) const
 {
     using namespace soci;
     throwIfChild();
 
-    std::string query =
-        "SELECT COUNT(*) FROM " + tableFromLedgerEntryType(let) + ";";
-    uint64_t count = 0;
-    mApp.getDatabase().getSession() << query, into(count);
-    return count;
-}
-
-uint64_t
-LedgerTxnRoot::countObjects(LedgerEntryType let,
-                            LedgerRange const& ledgers) const
-{
-    return mImpl->countObjects(let, ledgers);
-}
-
-uint64_t
-LedgerTxnRoot::Impl::countObjects(LedgerEntryType let,
-                                  LedgerRange const& ledgers) const
-{
-    using namespace soci;
-    throwIfChild();
-
-    std::string query = "SELECT COUNT(*) FROM " +
-                        tableFromLedgerEntryType(let) +
+    std::string query = "SELECT COUNT(*) FROM offers"
                         " WHERE lastmodified >= :v1 AND lastmodified < :v2;";
     uint64_t count = 0;
     int first = static_cast<int>(ledgers.mFirst);
     int limit = static_cast<int>(ledgers.limit());
-    mApp.getDatabase().getSession() << query, into(count), use(first),
-        use(limit);
+    getSession().session() << query, into(count), use(first), use(limit);
     return count;
 }
 
 void
-LedgerTxnRoot::deleteObjectsModifiedOnOrAfterLedger(uint32_t ledger) const
+LedgerTxnRoot::deleteOffersModifiedOnOrAfterLedger(uint32_t ledger) const
 {
-    return mImpl->deleteObjectsModifiedOnOrAfterLedger(ledger);
+    return mImpl->deleteOffersModifiedOnOrAfterLedger(ledger);
 }
 
 void
-LedgerTxnRoot::Impl::deleteObjectsModifiedOnOrAfterLedger(uint32_t ledger) const
+LedgerTxnRoot::Impl::deleteOffersModifiedOnOrAfterLedger(uint32_t ledger) const
 {
     using namespace soci;
     throwIfChild();
     mEntryCache.clear();
     mBestOffers.clear();
 
-    for (auto let : xdr::xdr_traits<LedgerEntryType>::enum_values())
+    std::string query = "DELETE FROM offers WHERE lastmodified >= :v1";
+    getSession().session() << query, use(ledger);
+}
+
+void
+LedgerTxnRoot::dropOffers()
+{
+    mImpl->dropOffers();
+}
+
+uint32_t
+LedgerTxnRoot::prefetchClassic(UnorderedSet<LedgerKey> const& keys)
+{
+    return mImpl->prefetchClassic(keys);
+}
+
+uint32_t
+LedgerTxnRoot::prefetchSoroban(UnorderedSet<LedgerKey> const& keys,
+                               LedgerKeyMeter* lkMeter)
+
+{
+    releaseAssert(lkMeter);
+    return mImpl->prefetchSoroban(keys, lkMeter);
+}
+
+uint32_t
+LedgerTxnRoot::Impl::prefetchSoroban(UnorderedSet<LedgerKey> const& keys,
+                                     LedgerKeyMeter* lkMeter)
+{
+    ZoneScoped;
+    return prefetchInternal(keys, lkMeter);
+}
+uint32_t
+LedgerTxnRoot::Impl::prefetchClassic(UnorderedSet<LedgerKey> const& keys)
+{
+    ZoneScoped;
+    return prefetchInternal(keys);
+}
+uint32_t
+LedgerTxnRoot::Impl::prefetchInternal(UnorderedSet<LedgerKey> const& keys,
+                                      LedgerKeyMeter* lkMeter)
+{
+#ifdef BUILD_TESTS
+    if (mApp.getConfig().MODE_USES_IN_MEMORY_LEDGER)
     {
-        LedgerEntryType t = static_cast<LedgerEntryType>(let);
-        std::string query = "DELETE FROM " + tableFromLedgerEntryType(t) +
-                            " WHERE lastmodified >= :v1";
-        mApp.getDatabase().getSession() << query, use(ledger);
+        return 0;
     }
-}
+#endif
 
-void
-LedgerTxnRoot::dropAccounts(bool rebuild)
-{
-    mImpl->dropAccounts(rebuild);
-}
-
-void
-LedgerTxnRoot::dropData(bool rebuild)
-{
-    mImpl->dropData(rebuild);
-}
-
-void
-LedgerTxnRoot::dropOffers(bool rebuild)
-{
-    mImpl->dropOffers(rebuild);
-}
-
-void
-LedgerTxnRoot::dropTrustLines(bool rebuild)
-{
-    mImpl->dropTrustLines(rebuild);
-}
-
-void
-LedgerTxnRoot::dropClaimableBalances(bool rebuild)
-{
-    mImpl->dropClaimableBalances(rebuild);
-}
-
-void
-LedgerTxnRoot::dropLiquidityPools(bool rebuild)
-{
-    mImpl->dropLiquidityPools(rebuild);
-}
-
-void
-LedgerTxnRoot::dropContractData(bool rebuild)
-{
-    mImpl->dropContractData(rebuild);
-}
-
-void
-LedgerTxnRoot::dropContractCode(bool rebuild)
-{
-    mImpl->dropContractCode(rebuild);
-}
-
-void
-LedgerTxnRoot::dropConfigSettings(bool rebuild)
-{
-    mImpl->dropConfigSettings(rebuild);
-}
-
-void
-LedgerTxnRoot::dropTTL(bool rebuild)
-{
-    mImpl->dropTTL(rebuild);
-}
-
-uint32_t
-LedgerTxnRoot::prefetch(UnorderedSet<LedgerKey> const& keys)
-{
-    return mImpl->prefetch(keys);
-}
-
-uint32_t
-LedgerTxnRoot::Impl::prefetch(UnorderedSet<LedgerKey> const& keys)
-{
     ZoneScoped;
     uint32_t total = 0;
 
@@ -2977,130 +2931,27 @@ LedgerTxnRoot::Impl::prefetch(UnorderedSet<LedgerKey> const& keys)
         {
             keys.insert(key);
         }
-    };
-
-    if (mApp.getConfig().isUsingBucketListDB())
-    {
-        LedgerKeySet keysToSearch;
-        for (auto const& key : keys)
+        else if (lkMeter)
         {
-            insertIfNotLoaded(keysToSearch, key);
-        }
-
-        auto blLoad = mApp.getBucketManager().loadKeys(keysToSearch);
-        cacheResult(populateLoadedEntries(keysToSearch, blLoad));
-    }
-    else
-    {
-        UnorderedSet<LedgerKey> accounts;
-        UnorderedSet<LedgerKey> offers;
-        UnorderedSet<LedgerKey> trustlines;
-        UnorderedSet<LedgerKey> data;
-        UnorderedSet<LedgerKey> claimablebalance;
-        UnorderedSet<LedgerKey> liquiditypool;
-        UnorderedSet<LedgerKey> contractdata;
-        UnorderedSet<LedgerKey> configSettings;
-        UnorderedSet<LedgerKey> contractCode;
-        UnorderedSet<LedgerKey> ttl;
-
-        for (auto const& key : keys)
-        {
-            switch (key.type())
+            auto const& mEntry = mEntryCache.get(key);
+            if (mEntry.entry)
             {
-            case ACCOUNT:
-                insertIfNotLoaded(accounts, key);
-                if (accounts.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadAccounts(accounts));
-                    accounts.clear();
-                }
-                break;
-            case OFFER:
-                insertIfNotLoaded(offers, key);
-                if (offers.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadOffers(offers));
-                    offers.clear();
-                }
-                break;
-            case TRUSTLINE:
-                insertIfNotLoaded(trustlines, key);
-                if (trustlines.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadTrustLines(trustlines));
-                    trustlines.clear();
-                }
-                break;
-            case DATA:
-                insertIfNotLoaded(data, key);
-                if (data.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadData(data));
-                    data.clear();
-                }
-                break;
-            case CLAIMABLE_BALANCE:
-                insertIfNotLoaded(claimablebalance, key);
-                if (claimablebalance.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadClaimableBalance(claimablebalance));
-                    claimablebalance.clear();
-                }
-                break;
-            case LIQUIDITY_POOL:
-                insertIfNotLoaded(liquiditypool, key);
-                if (liquiditypool.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadLiquidityPool(liquiditypool));
-                    liquiditypool.clear();
-                }
-                break;
-            case CONTRACT_DATA:
-                insertIfNotLoaded(contractdata, key);
-                if (contractdata.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadContractData(contractdata));
-                    contractdata.clear();
-                }
-                break;
-            case CONTRACT_CODE:
-                insertIfNotLoaded(contractCode, key);
-                if (contractCode.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadContractCode(contractCode));
-                    contractCode.clear();
-                }
-                break;
-            case CONFIG_SETTING:
-                insertIfNotLoaded(configSettings, key);
-                if (configSettings.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadConfigSettings(configSettings));
-                    configSettings.clear();
-                }
-                break;
-            case TTL:
-                insertIfNotLoaded(ttl, key);
-                if (ttl.size() == mBulkLoadBatchSize)
-                {
-                    cacheResult(bulkLoadTTL(ttl));
-                    ttl.clear();
-                }
+                // If the key is already in the cache, it still contributes to
+                // metering.
+                lkMeter->updateReadQuotasForKey(key,
+                                                xdr::xdr_size(*mEntry.entry));
             }
         }
+    };
 
-        //  Prefetch whatever is remaining
-        cacheResult(bulkLoadAccounts(accounts));
-        cacheResult(bulkLoadOffers(offers));
-        cacheResult(bulkLoadTrustLines(trustlines));
-        cacheResult(bulkLoadData(data));
-        cacheResult(bulkLoadClaimableBalance(claimablebalance));
-        cacheResult(bulkLoadLiquidityPool(liquiditypool));
-        cacheResult(bulkLoadConfigSettings(configSettings));
-        cacheResult(bulkLoadContractData(contractdata));
-        cacheResult(bulkLoadContractCode(contractCode));
-        cacheResult(bulkLoadTTL(ttl));
+    LedgerKeySet keysToSearch;
+    for (auto const& key : keys)
+    {
+        insertIfNotLoaded(keysToSearch, key);
     }
+    auto blLoad = getSearchableLiveBucketListSnapshot().loadKeysWithLimits(
+        keysToSearch, lkMeter);
+    cacheResult(populateLoadedEntries(keysToSearch, blLoad, lkMeter));
 
     return total;
 }
@@ -3341,7 +3192,7 @@ LedgerTxnRoot::Impl::populateEntryCacheFromBestOffers(
             toPrefetch.emplace(trustlineKey(oe.sellerID, oe.selling));
         }
     }
-    prefetch(toPrefetch);
+    prefetchClassic(toPrefetch);
 }
 
 bool
@@ -3367,6 +3218,20 @@ LedgerTxnRoot::Impl::areEntriesMissingInCacheForOffer(OfferEntry const& oe)
     }
 
     return false;
+}
+
+SearchableLiveBucketListSnapshot const&
+LedgerTxnRoot::Impl::getSearchableLiveBucketListSnapshot() const
+{
+    if (!mSearchableBucketListSnapshot)
+    {
+        mSearchableBucketListSnapshot =
+            mApp.getBucketManager()
+                .getBucketSnapshotManager()
+                .copySearchableLiveBucketListSnapshot();
+    }
+
+    return *mSearchableBucketListSnapshot;
 }
 
 std::shared_ptr<LedgerEntry const>
@@ -3482,8 +3347,7 @@ LedgerTxnRoot::Impl::getOffersByAccountAndAsset(AccountID const& account,
             toPrefetch.emplace(trustlineKey(oe.sellerID, oe.selling));
         }
     }
-    prefetch(toPrefetch);
-
+    prefetchClassic(toPrefetch);
     return res;
 }
 
@@ -3502,17 +3366,9 @@ LedgerTxnRoot::Impl::getPoolShareTrustLinesByAccountAndAsset(
     std::vector<LedgerEntry> trustLines;
     try
     {
-        if (mApp.getConfig().isUsingBucketListDB())
-        {
-            trustLines =
-                mApp.getBucketManager()
-                    .loadPoolShareTrustLinesByAccountAndAsset(account, asset);
-        }
-        else
-        {
-            trustLines =
-                loadPoolShareTrustLinesByAccountAndAsset(account, asset);
-        }
+        trustLines =
+            getSearchableLiveBucketListSnapshot()
+                .loadPoolShareTrustLinesByAccountAndAsset(account, asset);
     }
     catch (NonSociRelatedException&)
     {
@@ -3566,15 +3422,8 @@ LedgerTxnRoot::Impl::getInflationWinners(size_t maxWinners, int64_t minVotes)
 {
     try
     {
-        if (mApp.getConfig().isUsingBucketListDB())
-        {
-            return mApp.getBucketManager().loadInflationWinners(maxWinners,
-                                                                minVotes);
-        }
-        else
-        {
-            return loadInflationWinners(maxWinners, minVotes);
-        }
+        return getSearchableLiveBucketListSnapshot().loadInflationWinners(
+            maxWinners, minVotes);
     }
     catch (std::exception& e)
     {
@@ -3622,47 +3471,13 @@ LedgerTxnRoot::Impl::getNewestVersion(InternalLedgerKey const& gkey) const
     std::shared_ptr<LedgerEntry const> entry;
     try
     {
-        if (mApp.getConfig().isUsingBucketListDB() && key.type() != OFFER)
+        if (key.type() != OFFER)
         {
-            entry = mApp.getBucketManager().getLedgerEntry(key);
+            entry = getSearchableLiveBucketListSnapshot().load(key);
         }
         else
         {
-            switch (key.type())
-            {
-            case ACCOUNT:
-                entry = loadAccount(key);
-                break;
-            case DATA:
-                entry = loadData(key);
-                break;
-            case OFFER:
-                entry = loadOffer(key);
-                break;
-            case TRUSTLINE:
-                entry = loadTrustLine(key);
-                break;
-            case CLAIMABLE_BALANCE:
-                entry = loadClaimableBalance(key);
-                break;
-            case LIQUIDITY_POOL:
-                entry = loadLiquidityPool(key);
-                break;
-            case CONTRACT_DATA:
-                entry = loadContractData(key);
-                break;
-            case CONTRACT_CODE:
-                entry = loadContractCode(key);
-                break;
-            case CONFIG_SETTING:
-                entry = loadConfigSetting(key);
-                break;
-            case TTL:
-                entry = loadTTL(key);
-                break;
-            default:
-                throw std::runtime_error("Unknown key type");
-            }
+            entry = loadOffer(key);
         }
     }
     catch (NonSociRelatedException&)
@@ -3707,6 +3522,7 @@ LedgerTxnRoot::Impl::rollbackChild() noexcept
         {
             mTransaction->rollback();
             mTransaction.reset();
+            mSession.reset();
         }
         catch (std::exception& e)
         {
@@ -3724,6 +3540,7 @@ LedgerTxnRoot::Impl::rollbackChild() noexcept
     mChild = nullptr;
     mPrefetchHits = 0;
     mPrefetchMisses = 0;
+    mSearchableBucketListSnapshot.reset();
 }
 
 std::shared_ptr<InternalLedgerEntry const>

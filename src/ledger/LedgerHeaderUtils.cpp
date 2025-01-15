@@ -7,6 +7,7 @@
 #include "crypto/SHA.h"
 #include "database/Database.h"
 #include "database/DatabaseUtils.h"
+#include "history/CheckpointBuilder.h"
 #include "util/Decoder.h"
 #include "util/GlobalChecks.h"
 #include "util/Logging.h"
@@ -42,7 +43,7 @@ isValid(LedgerHeader const& lh)
 }
 
 void
-storeInDatabase(Database& db, LedgerHeader const& header)
+storeInDatabase(Database& db, LedgerHeader const& header, SessionWrapper& sess)
 {
     ZoneScoped;
     if (!isValid(header))
@@ -63,7 +64,8 @@ storeInDatabase(Database& db, LedgerHeader const& header)
         "INSERT INTO ledgerheaders "
         "(ledgerhash, prevhash, bucketlisthash, ledgerseq, closetime, data) "
         "VALUES "
-        "(:h,        :ph,      :blh,            :seq,     :ct,       :data)");
+        "(:h,        :ph,      :blh,            :seq,     :ct,       :data)",
+        sess);
     auto& st = prep.statement();
     st.exchange(soci::use(hash));
     st.exchange(soci::use(prevHash));
@@ -111,7 +113,8 @@ loadByHash(Database& db, Hash const& hash)
     std::string headerEncoded;
 
     auto prep = db.getPreparedStatement("SELECT data FROM ledgerheaders "
-                                        "WHERE ledgerhash = :h");
+                                        "WHERE ledgerhash = :h",
+                                        db.getSession());
     auto& st = prep.statement();
     st.exchange(soci::into(headerEncoded));
     st.exchange(soci::use(hash_s));
@@ -135,6 +138,25 @@ loadByHash(Database& db, Hash const& hash)
     }
 
     return lhPtr;
+}
+
+uint32_t
+loadMaxLedgerSeq(Database& db)
+{
+    ZoneScoped;
+    uint32_t seq = 0;
+    soci::indicator maxIndicator;
+    auto prep = db.getPreparedStatement(
+        "SELECT MAX(ledgerseq) FROM ledgerheaders", db.getSession());
+    auto& st = prep.statement();
+    st.exchange(soci::into(seq, maxIndicator));
+    st.define_and_bind();
+    st.execute(true);
+    if (maxIndicator == soci::indicator::i_ok)
+    {
+        return seq;
+    }
+    return 0;
 }
 
 std::shared_ptr<LedgerHeader>
@@ -168,24 +190,16 @@ loadBySequence(Database& db, soci::session& sess, uint32_t seq)
 }
 
 void
-deleteOldEntries(Database& db, uint32_t ledgerSeq, uint32_t count)
+deleteOldEntries(soci::session& sess, uint32_t ledgerSeq, uint32_t count)
 {
     ZoneScoped;
-    DatabaseUtils::deleteOldEntriesHelper(db.getSession(), ledgerSeq, count,
+    DatabaseUtils::deleteOldEntriesHelper(sess, ledgerSeq, count,
                                           "ledgerheaders", "ledgerseq");
-}
-
-void
-deleteNewerEntries(Database& db, uint32_t ledgerSeq)
-{
-    ZoneScoped;
-    DatabaseUtils::deleteNewerEntriesHelper(db.getSession(), ledgerSeq,
-                                            "ledgerheaders", "ledgerseq");
 }
 
 size_t
 copyToStream(Database& db, soci::session& sess, uint32_t ledgerSeq,
-             uint32_t ledgerCount, XDROutputFileStream& headersOut)
+             uint32_t ledgerCount, CheckpointBuilder& checkpointBuilder)
 {
     ZoneNamedN(selectLedgerHeadersZone, "select ledgerheaders history", true);
     uint32_t begin = ledgerSeq, end = ledgerSeq + ledgerCount;
@@ -207,7 +221,8 @@ copyToStream(Database& db, soci::session& sess, uint32_t ledgerSeq,
         lhe.header = decodeFromData(headerEncoded);
         lhe.hash = xdrSha256(lhe.header);
         CLOG_DEBUG(Ledger, "Streaming ledger-header {}", lhe.header.ledgerSeq);
-        headersOut.writeOne(lhe);
+        checkpointBuilder.appendLedgerHeader(lhe.header,
+                                             /* skipStartupCheck */ true);
         ++n;
         st.fetch();
     }
@@ -219,17 +234,17 @@ dropAll(Database& db)
 {
     std::string coll = db.getSimpleCollationClause();
 
-    db.getSession() << "DROP TABLE IF EXISTS ledgerheaders;";
-    db.getSession() << "CREATE TABLE ledgerheaders ("
-                    << "ledgerhash      CHARACTER(64) " << coll
-                    << " PRIMARY KEY,"
-                    << "prevhash        CHARACTER(64) NOT NULL,"
-                       "bucketlisthash  CHARACTER(64) NOT NULL,"
-                       "ledgerseq       INT UNIQUE CHECK (ledgerseq >= 0),"
-                       "closetime       BIGINT NOT NULL CHECK (closetime >= 0),"
-                       "data            TEXT NOT NULL"
-                       ");";
-    db.getSession()
+    db.getRawSession() << "DROP TABLE IF EXISTS ledgerheaders;";
+    db.getRawSession()
+        << "CREATE TABLE ledgerheaders ("
+        << "ledgerhash      CHARACTER(64) " << coll << " PRIMARY KEY,"
+        << "prevhash        CHARACTER(64) NOT NULL,"
+           "bucketlisthash  CHARACTER(64) NOT NULL,"
+           "ledgerseq       INT UNIQUE CHECK (ledgerseq >= 0),"
+           "closetime       BIGINT NOT NULL CHECK (closetime >= 0),"
+           "data            TEXT NOT NULL"
+           ");";
+    db.getRawSession()
         << "CREATE INDEX ledgersbyseq ON ledgerheaders ( ledgerseq );";
 }
 }

@@ -4,16 +4,21 @@
 // under the Apache License, Version 2.0. See the COPYING file at the root
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
-#include "bucket/LedgerCmp.h"
 #include "util/GlobalChecks.h"
 #include "util/NonCopyable.h"
-#include <atomic>
+#include "util/XDROperators.h" // IWYU pragma: keep
+#include "xdr/Stellar-ledger-entries.h"
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <variant>
 
 #include <cereal/archives/binary.hpp>
+
+namespace asio
+{
+class io_context;
+}
 
 namespace stellar
 {
@@ -33,6 +38,7 @@ namespace stellar
  */
 
 class BucketManager;
+struct BucketEntryCounters;
 
 // BucketIndex abstract interface
 class BucketIndex : public NonMovableOrCopyable
@@ -74,7 +80,7 @@ class BucketIndex : public NonMovableOrCopyable
                                   IndividualIndex::const_iterator>;
 
     inline static const std::string DB_BACKEND_STATE = "bl";
-    inline static const uint32_t BUCKET_INDEX_VERSION = 1;
+    inline static const uint32_t BUCKET_INDEX_VERSION = 4;
 
     // Returns true if LedgerEntryType not supported by BucketListDB
     static bool typeNotSupported(LedgerEntryType t);
@@ -83,9 +89,10 @@ class BucketIndex : public NonMovableOrCopyable
     // the largest buckets) and should only be called once. If pageSize == 0 or
     // if file size is less than the cutoff, individual key index is used.
     // Otherwise range index is used, with the range defined by pageSize.
+    template <class BucketT>
     static std::unique_ptr<BucketIndex const>
     createIndex(BucketManager& bm, std::filesystem::path const& filename,
-                Hash const& hash);
+                Hash const& hash, asio::io_context& ctx);
 
     // Loads index from given file. If file does not exist or if saved
     // index does not have same parameters as current config, return null
@@ -109,9 +116,19 @@ class BucketIndex : public NonMovableOrCopyable
 
     // Returns lower bound and upper bound for poolshare trustline entry
     // positions associated with the given accountID. If no trustlines found,
-    // returns std::pair<0, 0>
-    virtual std::pair<std::streamoff, std::streamoff>
+    // returns nullopt
+    virtual std::optional<std::pair<std::streamoff, std::streamoff>>
     getPoolshareTrustlineRange(AccountID const& accountID) const = 0;
+
+    // Return all PoolIDs that contain the given asset on either side of the
+    // pool
+    virtual std::vector<PoolID> const&
+    getPoolIDsByAsset(Asset const& asset) const = 0;
+
+    // Returns lower bound and upper bound for offer entry positions in the
+    // given bucket, or std::nullopt if no offers exist
+    virtual std::optional<std::pair<std::streamoff, std::streamoff>>
+    getOfferRange() const = 0;
 
     // Returns page size for index. InidividualIndex returns 0 for page size
     virtual std::streamoff getPageSize() const = 0;
@@ -122,7 +139,7 @@ class BucketIndex : public NonMovableOrCopyable
 
     virtual void markBloomMiss() const = 0;
     virtual void markBloomLookup() const = 0;
-
+    virtual BucketEntryCounters const& getBucketEntryCounters() const = 0;
 #ifdef BUILD_TESTS
     virtual bool operator==(BucketIndex const& inRaw) const = 0;
 #endif

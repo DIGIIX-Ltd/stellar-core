@@ -4,9 +4,11 @@
 
 #include "ledger/LedgerCloseMetaFrame.h"
 #include "crypto/SHA.h"
+#include "ledger/LedgerTypeUtils.h"
 #include "transactions/TransactionMetaFrame.h"
 #include "util/GlobalChecks.h"
 #include "util/ProtocolVersion.h"
+#include "xdr/Stellar-ledger.h"
 
 namespace stellar
 {
@@ -127,7 +129,7 @@ LedgerCloseMetaFrame::upgradesProcessing()
 }
 
 void
-LedgerCloseMetaFrame::populateTxSet(TxSetFrame const& txSet)
+LedgerCloseMetaFrame::populateTxSet(TxSetXDRFrame const& txSet)
 {
     switch (mVersion)
     {
@@ -143,36 +145,38 @@ LedgerCloseMetaFrame::populateTxSet(TxSetFrame const& txSet)
 }
 
 void
-LedgerCloseMetaFrame::setTotalByteSizeOfBucketList(uint64_t size)
+LedgerCloseMetaFrame::populateEvictedEntries(
+    EvictedStateVectors const& evictedState)
 {
     releaseAssert(mVersion == 1);
-    mLedgerCloseMeta.v1().totalByteSizeOfBucketList = size;
+    for (auto const& key : evictedState.deletedKeys)
+    {
+        releaseAssertOrThrow(isTemporaryEntry(key) || key.type() == TTL);
+        mLedgerCloseMeta.v1().evictedTemporaryLedgerKeys.emplace_back(key);
+    }
+    for (auto const& entry : evictedState.archivedEntries)
+    {
+        releaseAssertOrThrow(isPersistentEntry(entry.data));
+        // Unfortunately, for legacy purposes, evictedTemporaryLedgerKeys is
+        // misnamed and stores all evicted keys, both temp and persistent.
+        mLedgerCloseMeta.v1().evictedTemporaryLedgerKeys.emplace_back(
+            LedgerEntryKey(entry));
+    }
 }
 
 void
-LedgerCloseMetaFrame::populateEvictedEntries(
-    LedgerEntryChanges const& evictionChanges)
+LedgerCloseMetaFrame::setNetworkConfiguration(
+    SorobanNetworkConfig const& networkConfig, bool emitExtV1)
 {
     releaseAssert(mVersion == 1);
-    for (auto const& change : evictionChanges)
+    mLedgerCloseMeta.v1().totalByteSizeOfBucketList =
+        networkConfig.getAverageBucketListSize();
+
+    if (emitExtV1)
     {
-        switch (change.type())
-        {
-        case LEDGER_ENTRY_CREATED:
-            throw std::runtime_error("unexpected create in eviction meta");
-        case LEDGER_ENTRY_STATE:
-            continue;
-        case LEDGER_ENTRY_UPDATED:
-            // The scan also updates the eviction iterator, but should only
-            // update the eviction iterator
-            releaseAssert(change.updated().data.type() == CONFIG_SETTING);
-            continue;
-        case LEDGER_ENTRY_REMOVED:
-            auto const& key = change.removed();
-            releaseAssert(isTemporaryEntry(key) || key.type() == TTL);
-            mLedgerCloseMeta.v1().evictedTemporaryLedgerKeys.push_back(key);
-            break;
-        }
+        mLedgerCloseMeta.v1().ext.v(1);
+        auto& ext = mLedgerCloseMeta.v1().ext.v1();
+        ext.sorobanFeeWrite1KB = networkConfig.feeWrite1KB();
     }
 }
 

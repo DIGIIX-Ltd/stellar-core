@@ -19,17 +19,16 @@ using namespace stellar;
 using namespace stellar::txtest;
 
 static OperationResultCode
-getOperationResultCode(TransactionFrameBasePtr& tx, size_t i)
+getOperationResultCode(TransactionTestFrame& tx, size_t i)
 {
-    auto const& opRes = tx->getResult().result.results()[i];
+    auto const& opRes = tx.getResult().result.results()[i];
     return opRes.code();
 }
 
 static BeginSponsoringFutureReservesResultCode
-getBeginSponsoringFutureReservesResultCode(TransactionFrameBasePtr& tx,
-                                           size_t i)
+getBeginSponsoringFutureReservesResultCode(TransactionTestFrame& tx, size_t i)
 {
-    auto const& opRes = tx->getResult().result.results()[i];
+    auto const& opRes = tx.getResult().result.results()[i];
     return opRes.tr().beginSponsoringFutureReservesResult().code();
 }
 
@@ -50,10 +49,11 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
                 {root.op(beginSponsoringFutureReserves(a1))}, {});
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
-            REQUIRE(!tx->checkValid(*app, ltx, 0, 0, 0));
+            REQUIRE(!tx->checkValidForTesting(app->getAppConnector(), ltx, 0, 0,
+                                              0));
             ltx.commit();
 
-            REQUIRE(getOperationResultCode(tx, 0) == opNOT_SUPPORTED);
+            REQUIRE(getOperationResultCode(*tx, 0) == opNOT_SUPPORTED);
         });
     }
 
@@ -65,10 +65,11 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
                 {root.op(beginSponsoringFutureReserves(root))}, {});
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
-            REQUIRE(!tx->checkValid(*app, ltx, 0, 0, 0));
+            REQUIRE(!tx->checkValidForTesting(app->getAppConnector(), ltx, 0, 0,
+                                              0));
             ltx.commit();
 
-            REQUIRE(getBeginSponsoringFutureReservesResultCode(tx, 0) ==
+            REQUIRE(getBeginSponsoringFutureReservesResultCode(*tx, 0) ==
                     BEGIN_SPONSORING_FUTURE_RESERVES_MALFORMED);
         });
     }
@@ -85,14 +86,15 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
             TransactionMetaFrame txm(ltx.loadHeader().current().ledgerVersion);
-            REQUIRE(tx->checkValid(*app, ltx, 0, 0, 0));
-            REQUIRE(!tx->apply(*app, ltx, txm));
+            REQUIRE(
+                tx->checkValidForTesting(app->getAppConnector(), ltx, 0, 0, 0));
+            REQUIRE(!tx->apply(app->getAppConnector(), ltx, txm));
             ltx.commit();
 
             REQUIRE(tx->getResult().result.code() == txFAILED);
-            REQUIRE(getBeginSponsoringFutureReservesResultCode(tx, 0) ==
+            REQUIRE(getBeginSponsoringFutureReservesResultCode(*tx, 0) ==
                     BEGIN_SPONSORING_FUTURE_RESERVES_SUCCESS);
-            REQUIRE(getBeginSponsoringFutureReservesResultCode(tx, 1) ==
+            REQUIRE(getBeginSponsoringFutureReservesResultCode(*tx, 1) ==
                     BEGIN_SPONSORING_FUTURE_RESERVES_ALREADY_SPONSORED);
         });
     }
@@ -107,8 +109,9 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
             TransactionMetaFrame txm(ltx.loadHeader().current().ledgerVersion);
-            REQUIRE(tx->checkValid(*app, ltx, 0, 0, 0));
-            REQUIRE(!tx->apply(*app, ltx, txm));
+            REQUIRE(
+                tx->checkValidForTesting(app->getAppConnector(), ltx, 0, 0, 0));
+            REQUIRE(!tx->apply(app->getAppConnector(), ltx, txm));
             ltx.commit();
 
             REQUIRE(tx->getResultCode() == txBAD_SPONSORSHIP);
@@ -130,14 +133,15 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
             TransactionMetaFrame txm(ltx.loadHeader().current().ledgerVersion);
-            REQUIRE(tx->checkValid(*app, ltx, 0, 0, 0));
-            REQUIRE(!tx->apply(*app, ltx, txm));
+            REQUIRE(
+                tx->checkValidForTesting(app->getAppConnector(), ltx, 0, 0, 0));
+            REQUIRE(!tx->apply(app->getAppConnector(), ltx, txm));
             ltx.commit();
 
             REQUIRE(tx->getResult().result.code() == txFAILED);
-            REQUIRE(getBeginSponsoringFutureReservesResultCode(tx, 0) ==
+            REQUIRE(getBeginSponsoringFutureReservesResultCode(*tx, 0) ==
                     BEGIN_SPONSORING_FUTURE_RESERVES_SUCCESS);
-            REQUIRE(getBeginSponsoringFutureReservesResultCode(tx, 1) ==
+            REQUIRE(getBeginSponsoringFutureReservesResultCode(*tx, 1) ==
                     BEGIN_SPONSORING_FUTURE_RESERVES_RECURSIVE);
         });
     }
@@ -157,14 +161,15 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
             TransactionMetaFrame txm(ltx.loadHeader().current().ledgerVersion);
-            REQUIRE(tx->checkValid(*app, ltx, 0, 0, 0));
-            REQUIRE(!tx->apply(*app, ltx, txm));
+            REQUIRE(
+                tx->checkValidForTesting(app->getAppConnector(), ltx, 0, 0, 0));
+            REQUIRE(!tx->apply(app->getAppConnector(), ltx, txm));
             ltx.commit();
 
             REQUIRE(tx->getResult().result.code() == txFAILED);
-            REQUIRE(getBeginSponsoringFutureReservesResultCode(tx, 0) ==
+            REQUIRE(getBeginSponsoringFutureReservesResultCode(*tx, 0) ==
                     BEGIN_SPONSORING_FUTURE_RESERVES_SUCCESS);
-            REQUIRE(getBeginSponsoringFutureReservesResultCode(tx, 1) ==
+            REQUIRE(getBeginSponsoringFutureReservesResultCode(*tx, 1) ==
                     BEGIN_SPONSORING_FUTURE_RESERVES_RECURSIVE);
         });
     }
@@ -181,8 +186,9 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
             TransactionMetaFrame txm(ltx.loadHeader().current().ledgerVersion);
-            REQUIRE(tx->checkValid(*app, ltx, 0, 0, 0));
-            REQUIRE(tx->apply(*app, ltx, txm));
+            REQUIRE(
+                tx->checkValidForTesting(app->getAppConnector(), ltx, 0, 0, 0));
+            REQUIRE(tx->apply(app->getAppConnector(), ltx, txm));
             ltx.commit();
 
             REQUIRE(tx->getResultCode() == txSUCCESS);
@@ -209,8 +215,9 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
 
             LedgerTxn ltx(app->getLedgerTxnRoot());
             TransactionMetaFrame txm1(ltx.loadHeader().current().ledgerVersion);
-            REQUIRE(tx1->checkValid(*app, ltx, 0, 0, 0));
-            REQUIRE(tx1->apply(*app, ltx, txm1));
+            REQUIRE(tx1->checkValidForTesting(app->getAppConnector(), ltx, 0, 0,
+                                              0));
+            REQUIRE(tx1->apply(app->getAppConnector(), ltx, txm1));
 
             checkSponsorship(ltx, trustlineKey(a1, cur1), 1,
                              &root.getPublicKey());
@@ -223,8 +230,9 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
                 {a1});
 
             TransactionMetaFrame txm2(ltx.loadHeader().current().ledgerVersion);
-            REQUIRE(tx2->checkValid(*app, ltx, 0, 0, 0));
-            REQUIRE(tx2->apply(*app, ltx, txm2));
+            REQUIRE(tx2->checkValidForTesting(app->getAppConnector(), ltx, 0, 0,
+                                              0));
+            REQUIRE(tx2->apply(app->getAppConnector(), ltx, txm2));
 
             checkSponsorship(ltx, a1.getPublicKey(), signer.key, 2,
                              &root.getPublicKey());
@@ -265,7 +273,8 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
 
                 {
                     LedgerTxn ltx(app->getLedgerTxnRoot());
-                    REQUIRE(!tx->checkValid(*app, ltx, 0, 0, 0));
+                    REQUIRE(!tx->checkValidForTesting(app->getAppConnector(),
+                                                      ltx, 0, 0, 0));
                     REQUIRE(tx->getResultCode() == txBAD_MIN_SEQ_AGE_OR_GAP);
                 }
 
@@ -273,7 +282,8 @@ TEST_CASE_VERSIONS("sponsor future reserves", "[tx][sponsorship]")
                     // this increments ledgerSeq
                     closeLedger(*app);
                     LedgerTxn ltx(app->getLedgerTxnRoot());
-                    REQUIRE(tx->checkValid(*app, ltx, 0, 0, 0));
+                    REQUIRE(tx->checkValidForTesting(app->getAppConnector(),
+                                                     ltx, 0, 0, 0));
                     REQUIRE(tx->getResultCode() == txSUCCESS);
                 }
             }

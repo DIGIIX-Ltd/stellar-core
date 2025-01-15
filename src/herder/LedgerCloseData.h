@@ -25,15 +25,22 @@ class LedgerCloseData
 {
   public:
     LedgerCloseData(
-        uint32_t ledgerSeq, TxSetFrameConstPtr txSet, StellarValue const& v,
+        uint32_t ledgerSeq, TxSetXDRFrameConstPtr txSet, StellarValue const& v,
         std::optional<Hash> const& expectedLedgerHash = std::nullopt);
+
+#ifdef BUILD_TESTS
+    LedgerCloseData(uint32_t ledgerSeq, TxSetXDRFrameConstPtr txSet,
+                    StellarValue const& v,
+                    std::optional<Hash> const& expectedLedgerHash,
+                    std::optional<TransactionResultSet> const& expectedResults);
+#endif // BUILD_TESTS
 
     uint32_t
     getLedgerSeq() const
     {
         return mLedgerSeq;
     }
-    TxSetFrameConstPtr
+    TxSetXDRFrameConstPtr
     getTxSet() const
     {
         return mTxSet;
@@ -48,6 +55,13 @@ class LedgerCloseData
     {
         return mExpectedLedgerHash;
     }
+#ifdef BUILD_TESTS
+    std::optional<TransactionResultSet> const&
+    getExpectedResults() const
+    {
+        return mExpectedResults;
+    }
+#endif // BUILD_TESTS
 
     StoredDebugTransactionSet
     toXDR() const
@@ -64,24 +78,27 @@ class LedgerCloseData
     {
         if (sts.txSet.v() == 0)
         {
-            return LedgerCloseData(sts.ledgerSeq,
-                                   TxSetFrame::makeFromWire(sts.txSet.txSet()),
-                                   sts.scpValue);
+            return LedgerCloseData(
+                sts.ledgerSeq, TxSetXDRFrame::makeFromWire(sts.txSet.txSet()),
+                sts.scpValue);
         }
         else
         {
             return LedgerCloseData(
                 sts.ledgerSeq,
-                TxSetFrame::makeFromWire(sts.txSet.generalizedTxSet()),
+                TxSetXDRFrame::makeFromWire(sts.txSet.generalizedTxSet()),
                 sts.scpValue);
         }
     }
 
   private:
     uint32_t mLedgerSeq;
-    TxSetFrameConstPtr mTxSet;
+    TxSetXDRFrameConstPtr mTxSet;
     StellarValue mValue;
-    std::optional<Hash> mExpectedLedgerHash;
+    std::optional<Hash> mExpectedLedgerHash = std::nullopt;
+#ifdef BUILD_TESTS
+    std::optional<TransactionResultSet> mExpectedResults = std::nullopt;
+#endif // BUILD_TESTS
 };
 
 std::string stellarValueToString(Config const& c, StellarValue const& sv);

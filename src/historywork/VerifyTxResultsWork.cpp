@@ -89,9 +89,9 @@ VerifyTxResultsWork::verifyTxResultsOfCheckpoint()
     ZoneScoped;
     try
     {
-        FileTransferInfo hi(mDownloadDir, HISTORY_FILE_TYPE_LEDGER,
+        FileTransferInfo hi(mDownloadDir, FileType::HISTORY_FILE_TYPE_LEDGER,
                             mCheckpoint);
-        FileTransferInfo ri(mDownloadDir, HISTORY_FILE_TYPE_RESULTS,
+        FileTransferInfo ri(mDownloadDir, FileType::HISTORY_FILE_TYPE_RESULTS,
                             mCheckpoint);
         mHdrIn.open(hi.localPath_nogz());
         mResIn.open(ri.localPath_nogz());
@@ -149,9 +149,8 @@ VerifyTxResultsWork::getCurrentTxResultSet(uint32_t ledger)
         if (res)
         {
             auto readLedger = mTxResultEntry.ledgerSeq;
-            auto const& hm = mApp.getHistoryManager();
-
-            auto low = hm.firstLedgerInCheckpointContaining(mCheckpoint);
+            auto low = HistoryManager::firstLedgerInCheckpointContaining(
+                mCheckpoint, mApp.getConfig());
             if (readLedger > mCheckpoint || readLedger < low)
             {
                 throw std::runtime_error("Results outside of checkpoint range");

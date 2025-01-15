@@ -3,18 +3,22 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 #include "bucket/BucketIndexImpl.h"
-#include "bucket/Bucket.h"
+#include "bucket/BucketIndex.h"
 #include "bucket/BucketManager.h"
-#include "bucket/LedgerCmp.h"
-#include "ledger/LedgerHashUtils.h"
+#include "bucket/BucketUtils.h"
+#include "bucket/HotArchiveBucket.h"
+#include "bucket/LiveBucket.h"
+#include "crypto/Hex.h"
+#include "crypto/ShortHash.h"
+#include "ledger/LedgerTypeUtils.h"
 #include "main/Config.h"
+#include "util/BinaryFuseFilter.h"
+#include "util/BufferedAsioCerealOutputArchive.h"
 #include "util/Fs.h"
 #include "util/LogSlowExecution.h"
 #include "util/Logging.h"
-#include "util/XDRCereal.h"
 #include "util/XDRStream.h"
 
-#include "lib/bloom_filter.hpp"
 #include <Tracy.hpp>
 #include <cereal/archives/binary.hpp>
 #include <cereal/types/memory.hpp>
@@ -23,7 +27,10 @@
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 
+#include <memory>
 #include <thread>
+#include <type_traits>
+#include <xdrpp/marshal.h>
 
 namespace stellar
 {
@@ -46,13 +53,13 @@ static inline std::streamoff
 effectivePageSize(Config const& cfg, size_t bucketSize)
 {
     // Convert cfg param from MB to bytes
-    if (auto cutoff = cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_CUTOFF * 1000000;
+    if (auto cutoff = cfg.BUCKETLIST_DB_INDEX_CUTOFF * 1000000;
         bucketSize < cutoff)
     {
         return 0;
     }
 
-    auto pageSizeExp = cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT;
+    auto pageSizeExp = cfg.BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT;
     releaseAssertOrThrow(pageSizeExp < 32);
     return pageSizeExp == 0 ? 0 : 1UL << pageSizeExp;
 }
@@ -64,13 +71,19 @@ BucketIndex::typeNotSupported(LedgerEntryType t)
 }
 
 template <class IndexT>
+template <class BucketEntryT>
 BucketIndexImpl<IndexT>::BucketIndexImpl(BucketManager& bm,
                                          std::filesystem::path const& filename,
                                          std::streamoff pageSize,
-                                         Hash const& hash)
+                                         Hash const& hash,
+                                         asio::io_context& ctx,
+                                         BucketEntryT const& typeTag)
     : mBloomMissMeter(bm.getBloomMissMeter())
     , mBloomLookupMeter(bm.getBloomLookupMeter())
 {
+    static_assert(std::is_same_v<BucketEntryT, BucketEntry> ||
+                  std::is_same_v<BucketEntryT, HotArchiveBucketEntry>);
+
     ZoneScoped;
     releaseAssert(!filename.empty());
 
@@ -78,47 +91,38 @@ BucketIndexImpl<IndexT>::BucketIndexImpl(BucketManager& bm,
         auto timer = LogSlowExecution("Indexing bucket");
         mData.pageSize = pageSize;
 
-        size_t const estimatedLedgerEntrySize =
-            xdr::xdr_traits<BucketEntry>::serial_size(BucketEntry{});
-        auto fileSize = fs::size(filename.string());
-        auto estimatedNumElems = fileSize / estimatedLedgerEntrySize;
-        size_t estimatedIndexEntries;
-
-        // Initialize bloom filter for range index
+        // We don't have a good way of estimating IndividualIndex size since
+        // keys are variable size, so only reserve range indexes since we know
+        // the page size ahead of time
         if constexpr (std::is_same<IndexT, RangeIndex>::value)
         {
-            ZoneNamedN(bloomInit, "bloomInit", true);
-            bloom_parameters params;
-            params.projected_element_count = estimatedNumElems;
-            params.false_positive_probability = 0.001; // 1 in 1000
-            params.random_seed = shortHash::getShortHashInitKey();
-            params.compute_optimal_parameters();
-            mData.filter = std::make_unique<bloom_filter>(params);
-            estimatedIndexEntries = fileSize / mData.pageSize;
-            CLOG_DEBUG(
-                Bucket,
-                "Bloom filter initialized with params: projected element count "
-                "{} false positive probability: {}, number of hashes: {}, "
-                "table size: {}",
-                params.projected_element_count,
-                params.false_positive_probability,
-                params.optimal_parameters.number_of_hashes,
-                params.optimal_parameters.table_size);
+            auto fileSize = std::filesystem::file_size(filename);
+            auto estimatedIndexEntries = fileSize / mData.pageSize;
+            mData.keysToOffset.reserve(estimatedIndexEntries);
         }
-        else
-        {
-            estimatedIndexEntries = estimatedNumElems;
-        }
-
-        mData.keysToOffset.reserve(estimatedIndexEntries);
 
         XDRInputFileStream in;
         in.open(filename.string());
         std::streamoff pos = 0;
         std::streamoff pageUpperBound = 0;
-        BucketEntry be;
+        BucketEntryT be;
         size_t iter = 0;
-        size_t count = 0;
+        [[maybe_unused]] size_t count = 0;
+
+        std::vector<uint64_t> keyHashes;
+        auto seed = shortHash::getShortHashInitKey();
+
+        auto countEntry = [&](BucketEntry const& be) {
+            if (be.type() == METAENTRY)
+            {
+                // Do not count meta entries.
+                return;
+            }
+            auto ledt = bucketEntryToLedgerEntryAndDurabilityType(be);
+            mData.counters.entryTypeCounts[ledt]++;
+            mData.counters.entryTypeSizes[ledt] += xdr::xdr_size(be);
+        };
+
         while (in && in.readOne(be))
         {
             // peridocially check if bucket manager is exiting to stop indexing
@@ -133,12 +137,63 @@ BucketIndexImpl<IndexT>::BucketIndexImpl(BucketManager& bm,
                 }
             }
 
-            if (be.type() != METAENTRY)
+            auto isMeta = [](auto const& be) {
+                if constexpr (std::is_same_v<BucketEntryT, LiveBucket::EntryT>)
+                {
+                    return be.type() == METAENTRY;
+                }
+                else
+                {
+                    static_assert(
+                        std::is_same_v<BucketEntryT, HotArchiveBucket::EntryT>,
+                        "unexpected bucket type");
+                    return be.type() == HOT_ARCHIVE_METAENTRY;
+                }
+            };
+
+            if (!isMeta(be))
             {
                 ++count;
                 LedgerKey key = getBucketLedgerKey(be);
-                if constexpr (std::is_same<IndexT, RangeIndex>::value)
+
+                if constexpr (std::is_same_v<BucketEntryT, LiveBucket::EntryT>)
                 {
+                    // We need an asset to poolID mapping for
+                    // loadPoolshareTrustlineByAccountAndAsset queries. For this
+                    // query, we only need to index INIT entries because:
+                    // 1. PoolID is the hash of the Assets it refers to, so this
+                    //    index cannot be invalidated by newer LIVEENTRY updates
+                    // 2. We do a join over all bucket indexes so we avoid
+                    // storing
+                    //    multiple redundant index entries (i.e. LIVEENTRY
+                    //    updates)
+                    // 3. We only use this index to collect the possible set of
+                    //    Trustline keys, then we load those keys. This means
+                    //    that we don't need to keep track of DEADENTRY. Even if
+                    //    a given INITENTRY has been deleted by a newer
+                    //    DEADENTRY, the trustline load will not return deleted
+                    //    trustlines, so the load result is still correct even
+                    //    if the index has a few deleted mappings.
+                    if (be.type() == INITENTRY && key.type() == LIQUIDITY_POOL)
+                    {
+                        auto const& poolParams = be.liveEntry()
+                                                     .data.liquidityPool()
+                                                     .body.constantProduct()
+                                                     .params;
+                        mData.assetToPoolID[poolParams.assetA].emplace_back(
+                            key.liquidityPool().liquidityPoolID);
+                        mData.assetToPoolID[poolParams.assetB].emplace_back(
+                            key.liquidityPool().liquidityPoolID);
+                    }
+                }
+
+                if constexpr (std::is_same_v<IndexT, RangeIndex>)
+                {
+                    auto keyBuf = xdr::xdr_to_opaque(key);
+                    SipHash24 hasher(seed.data());
+                    hasher.update(keyBuf.data(), keyBuf.size());
+                    keyHashes.emplace_back(hasher.digest());
+
                     if (pos >= pageUpperBound)
                     {
                         pageUpperBound =
@@ -152,56 +207,100 @@ BucketIndexImpl<IndexT>::BucketIndexImpl(BucketManager& bm,
                         releaseAssert(rangeEntry.upperBound < key);
                         rangeEntry.upperBound = key;
                     }
-
-                    auto keybuf = xdr::xdr_to_opaque(key);
-                    mData.filter->insert(keybuf.data(), keybuf.size());
                 }
                 else
                 {
+                    static_assert(std::is_same_v<IndexT, IndividualIndex>,
+                                  "unexpected index type");
                     mData.keysToOffset.emplace_back(key, pos);
+                }
+
+                if constexpr (std::is_same_v<BucketEntryT, LiveBucket::EntryT>)
+                {
+                    countEntry(be);
                 }
             }
 
             pos = in.pos();
         }
 
+        if constexpr (std::is_same_v<IndexT, RangeIndex>)
+        {
+            // Binary Fuse filter requires at least 2 elements
+            if (keyHashes.size() > 1)
+            {
+                // There is currently an access error that occurs very rarely
+                // for some random seed values. If this occurs, simply rotate
+                // the seed and try again.
+                for (int i = 0; i < 10; ++i)
+                {
+                    try
+                    {
+                        mData.filter = std::make_unique<BinaryFuseFilter16>(
+                            keyHashes, seed);
+                    }
+                    catch (std::out_of_range& e)
+                    {
+                        auto seedToStr = [](auto seed) {
+                            std::string result;
+                            for (auto b : seed)
+                            {
+                                fmt::format_to(std::back_inserter(result),
+                                               "{:02x}", b);
+                            }
+                            return result;
+                        };
+
+                        CLOG_ERROR(Bucket,
+                                   "Bad memory access in BinaryFuseFilter with "
+                                   "seed {}, retrying",
+                                   seedToStr(seed));
+                        seed[0]++;
+                    }
+                }
+            }
+        }
+
         CLOG_DEBUG(Bucket, "Indexed {} positions in {}",
                    mData.keysToOffset.size(), filename.filename());
-        if (std::is_same<IndexT, RangeIndex>::value &&
-            estimatedNumElems < count)
-        {
-            CLOG_WARNING(Bucket,
-                         "Underestimated bloom filter size. Estimated entry "
-                         "count: {}, Actual: {}",
-                         estimatedNumElems, count);
-        }
         ZoneValue(static_cast<int64_t>(count));
     }
 
-    if (bm.getConfig().isPersistingBucketListDBIndexes())
+    if (bm.getConfig().BUCKETLIST_DB_PERSIST_INDEX)
     {
-        saveToDisk(bm, hash);
+        saveToDisk(bm, hash, ctx);
     }
 }
 
-template <class IndexT>
+// Individual indexes are associated with small buckets, so it's more efficient
+// to just always recreate them instead of serializing to disk
+template <>
 void
-BucketIndexImpl<IndexT>::saveToDisk(BucketManager& bm, Hash const& hash) const
+BucketIndexImpl<BucketIndex::IndividualIndex>::saveToDisk(
+    BucketManager& bm, Hash const& hash, asio::io_context& ctx) const
+{
+}
+
+template <>
+void
+BucketIndexImpl<BucketIndex::RangeIndex>::saveToDisk(
+    BucketManager& bm, Hash const& hash, asio::io_context& ctx) const
 {
     ZoneScoped;
-    releaseAssert(bm.getConfig().isPersistingBucketListDBIndexes());
-    auto timer = LogSlowExecution("Saving index");
+    releaseAssert(bm.getConfig().BUCKETLIST_DB_PERSIST_INDEX);
+    auto timer =
+        LogSlowExecution("Saving index", LogSlowExecution::Mode::AUTOMATIC_RAII,
+                         "took", std::chrono::milliseconds(100));
 
     std::filesystem::path tmpFilename =
-        Bucket::randomBucketIndexName(bm.getTmpDir());
+        BucketBase::randomBucketIndexName(bm.getTmpDir());
     CLOG_DEBUG(Bucket, "Saving bucket index for {}: {}", hexAbbrev(hash),
                tmpFilename);
 
     {
-        std::ofstream out;
-        out.exceptions(std::ios::failbit | std::ios::badbit);
-        out.open(tmpFilename, std::ios_base::binary | std::ios_base::trunc);
-        cereal::BinaryOutputArchive ar(out);
+        OutputFileStream out(ctx, !bm.getConfig().DISABLE_XDR_FSYNC);
+        out.open(tmpFilename.string());
+        cereal::BufferedAsioOutputArchive ar(out);
         ar(mData);
     }
 
@@ -241,12 +340,14 @@ template <class IndexEntryT>
 static bool
 keyNotInIndexEntry(LedgerKey const& key, IndexEntryT const& indexEntry)
 {
-    if constexpr (std::is_same<IndexEntryT, BucketIndex::RangeEntry>::value)
+    if constexpr (std::is_same_v<IndexEntryT, BucketIndex::RangeEntry>)
     {
         return key < indexEntry.lowerBound || indexEntry.upperBound < key;
     }
     else
     {
+        static_assert(std::is_same_v<IndexEntryT, BucketIndex::IndividualEntry>,
+                      "unexpected index entry type");
         return !(key == indexEntry);
     }
 }
@@ -260,13 +361,16 @@ template <class IndexEntryT>
 static bool
 lower_bound_pred(IndexEntryT const& indexEntry, LedgerKey const& key)
 {
-    if constexpr (std::is_same<IndexEntryT,
-                               BucketIndex::RangeIndex::value_type>::value)
+    if constexpr (std::is_same_v<IndexEntryT,
+                                 BucketIndex::RangeIndex::value_type>)
     {
         return indexEntry.first.upperBound < key;
     }
     else
     {
+        static_assert(std::is_same_v<IndexEntryT,
+                                     BucketIndex::IndividualIndex::value_type>,
+                      "unexpected index entry type");
         return indexEntry.first < key;
     }
 }
@@ -280,25 +384,30 @@ template <class IndexEntryT>
 static bool
 upper_bound_pred(LedgerKey const& key, IndexEntryT const& indexEntry)
 {
-    if constexpr (std::is_same<IndexEntryT,
-                               BucketIndex::RangeIndex::value_type>::value)
+    if constexpr (std::is_same_v<IndexEntryT,
+                                 BucketIndex::RangeIndex::value_type>)
     {
         return key < indexEntry.first.lowerBound;
     }
     else
     {
+        static_assert(std::is_same_v<IndexEntryT,
+                                     BucketIndex::IndividualIndex::value_type>,
+                      "unexpected index entry type");
         return key < indexEntry.first;
     }
 }
 
+template <class BucketT>
 std::unique_ptr<BucketIndex const>
 BucketIndex::createIndex(BucketManager& bm,
                          std::filesystem::path const& filename,
-                         Hash const& hash)
+                         Hash const& hash, asio::io_context& ctx)
 {
+    BUCKET_TYPE_ASSERT(BucketT);
+
     ZoneScoped;
     auto const& cfg = bm.getConfig();
-    releaseAssertOrThrow(cfg.isUsingBucketListDB());
     releaseAssertOrThrow(!filename.empty());
     auto pageSize = effectivePageSize(cfg, fs::size(filename.string()));
 
@@ -306,22 +415,25 @@ BucketIndex::createIndex(BucketManager& bm,
     {
         if (pageSize == 0)
         {
-            CLOG_INFO(Bucket,
-                      "BucketIndex::createIndex() indexing individual keys in "
-                      "bucket {}",
-                      filename);
+            CLOG_DEBUG(Bucket,
+                       "BucketIndex::createIndex() indexing individual keys in "
+                       "bucket {}",
+                       filename);
             return std::unique_ptr<BucketIndexImpl<IndividualIndex> const>(
-                new BucketIndexImpl<IndividualIndex>(bm, filename, 0, hash));
+                new BucketIndexImpl<IndividualIndex>(
+                    bm, filename, 0, hash, ctx, typename BucketT::EntryT{}));
         }
         else
         {
-            CLOG_INFO(Bucket,
-                      "BucketIndex::createIndex() indexing key range with "
-                      "page size "
-                      "{} in bucket {}",
-                      pageSize, filename);
+            CLOG_DEBUG(Bucket,
+                       "BucketIndex::createIndex() indexing key range with "
+                       "page size "
+                       "{} in bucket {}",
+                       pageSize, filename);
             return std::unique_ptr<BucketIndexImpl<RangeIndex> const>(
-                new BucketIndexImpl<RangeIndex>(bm, filename, pageSize, hash));
+                new BucketIndexImpl<RangeIndex>(bm, filename, pageSize, hash,
+                                                ctx,
+                                                typename BucketT::EntryT{}));
         }
     }
     // BucketIndexImpl throws if BucketManager shuts down before index finishes,
@@ -395,9 +507,7 @@ BucketIndexImpl<IndexT>::scan(Iterator start, LedgerKey const& k) const
     // If the key is not in the bloom filter or in the lower bounded index
     // entry, return nullopt
     markBloomLookup();
-    auto keybuf = xdr::xdr_to_opaque(k);
-    if ((mData.filter &&
-         !mData.filter->contains(keybuf.data(), keybuf.size())) ||
+    if ((mData.filter && !mData.filter->contains(k)) ||
         keyIter == mData.keysToOffset.end() ||
         keyNotInIndexEntry(k, keyIter->first))
     {
@@ -410,29 +520,22 @@ BucketIndexImpl<IndexT>::scan(Iterator start, LedgerKey const& k) const
 }
 
 template <class IndexT>
-std::pair<std::streamoff, std::streamoff>
-BucketIndexImpl<IndexT>::getPoolshareTrustlineRange(
-    AccountID const& accountID) const
+std::optional<std::pair<std::streamoff, std::streamoff>>
+BucketIndexImpl<IndexT>::getOffsetBounds(LedgerKey const& lowerBound,
+                                         LedgerKey const& upperBound) const
 {
-    // Get the smallest and largest possible trustline keys for the given
-    // accountID
-    auto upperBound = getDummyPoolShareTrustlineKey(
-        accountID, std::numeric_limits<uint8_t>::max());
-    auto lowerBound = getDummyPoolShareTrustlineKey(
-        accountID, std::numeric_limits<uint8_t>::min());
-
     // Get the index iterators for the bounds
     auto startIter = std::lower_bound(
         mData.keysToOffset.begin(), mData.keysToOffset.end(), lowerBound,
         lower_bound_pred<typename IndexT::value_type>);
     if (startIter == mData.keysToOffset.end())
     {
-        return {};
+        return std::nullopt;
     }
 
-    auto endIter =
-        std::upper_bound(startIter, mData.keysToOffset.end(), upperBound,
-                         upper_bound_pred<typename IndexT::value_type>);
+    auto endIter = std::upper_bound(
+        std::next(startIter), mData.keysToOffset.end(), upperBound,
+        upper_bound_pred<typename IndexT::value_type>);
 
     // Get file offsets based on lower and upper bound iterators
     std::streamoff startOff = startIter->second;
@@ -445,6 +548,54 @@ BucketIndexImpl<IndexT>::getPoolshareTrustlineRange(
     }
 
     return std::make_pair(startOff, endOff);
+}
+
+template <class IndexT>
+std::vector<PoolID> const&
+BucketIndexImpl<IndexT>::getPoolIDsByAsset(Asset const& asset) const
+{
+    static const std::vector<PoolID> emptyVec = {};
+
+    auto iter = mData.assetToPoolID.find(asset);
+    if (iter == mData.assetToPoolID.end())
+    {
+        return emptyVec;
+    }
+
+    return iter->second;
+}
+
+template <class IndexT>
+std::optional<std::pair<std::streamoff, std::streamoff>>
+BucketIndexImpl<IndexT>::getPoolshareTrustlineRange(
+    AccountID const& accountID) const
+{
+    // Get the smallest and largest possible trustline keys for the given
+    // accountID
+    auto upperBound = getDummyPoolShareTrustlineKey(
+        accountID, std::numeric_limits<uint8_t>::max());
+    auto lowerBound = getDummyPoolShareTrustlineKey(
+        accountID, std::numeric_limits<uint8_t>::min());
+
+    return getOffsetBounds(lowerBound, upperBound);
+}
+
+template <class IndexT>
+std::optional<std::pair<std::streamoff, std::streamoff>>
+BucketIndexImpl<IndexT>::getOfferRange() const
+{
+    // Get the smallest and largest possible offer keys
+    LedgerKey upperBound(OFFER);
+    upperBound.offer().sellerID.ed25519().fill(
+        std::numeric_limits<uint8_t>::max());
+    upperBound.offer().offerID = std::numeric_limits<int64_t>::max();
+
+    LedgerKey lowerBound(OFFER);
+    lowerBound.offer().sellerID.ed25519().fill(
+        std::numeric_limits<uint8_t>::min());
+    lowerBound.offer().offerID = std::numeric_limits<int64_t>::min();
+
+    return getOffsetBounds(lowerBound, upperBound);
 }
 
 #ifdef BUILD_TESTS
@@ -463,17 +614,30 @@ BucketIndexImpl<IndexT>::operator==(BucketIndex const& inRaw) const
         return false;
     }
 
-    if constexpr (std::is_same<IndexT, RangeIndex>::value)
+    if constexpr (std::is_same_v<IndexT, RangeIndex>)
     {
-        releaseAssert(mData.filter);
-        releaseAssert(in.mData.filter);
-        if (*(mData.filter) != *(in.mData.filter))
+        // If both indexes have a filter, check if they are equal
+        if (mData.filter && in.mData.filter)
         {
-            return false;
+            if (!(*(mData.filter) == *(in.mData.filter)))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            // If both indexes don't fave a filter, check that each filter is
+            // null
+            if (mData.filter || in.mData.filter)
+            {
+                return false;
+            }
         }
     }
     else
     {
+        static_assert(std::is_same_v<IndexT, IndividualIndex>,
+                      "unexpected index type");
         releaseAssert(!mData.filter);
         releaseAssert(!in.mData.filter);
     }
@@ -486,6 +650,11 @@ BucketIndexImpl<IndexT>::operator==(BucketIndex const& inRaw) const
         {
             return false;
         }
+    }
+
+    if (mData.counters != in.mData.counters)
+    {
+        return false;
     }
 
     return true;
@@ -517,4 +686,20 @@ BucketIndexImpl<BucketIndex::RangeIndex>::markBloomLookup() const
 {
     mBloomLookupMeter.Mark();
 }
+
+template <class IndexT>
+BucketEntryCounters const&
+BucketIndexImpl<IndexT>::getBucketEntryCounters() const
+{
+    return mData.counters;
+}
+
+template std::unique_ptr<BucketIndex const>
+BucketIndex::createIndex<LiveBucket>(BucketManager& bm,
+                                     std::filesystem::path const& filename,
+                                     Hash const& hash, asio::io_context& ctx);
+template std::unique_ptr<BucketIndex const>
+BucketIndex::createIndex<HotArchiveBucket>(
+    BucketManager& bm, std::filesystem::path const& filename, Hash const& hash,
+    asio::io_context& ctx);
 }

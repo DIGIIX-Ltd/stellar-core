@@ -5,11 +5,10 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 #include "bucket/LedgerCmp.h"
-#include "numeric.h"
-#include "overlay/StellarXDR.h"
-#include "xdrpp/message.h"
+#include "xdr/Stellar-ledger-entries.h"
+#include "xdr/Stellar-ledger.h"
+#include "xdr/Stellar-types.h"
 #include <set>
-#include <type_traits>
 #include <vector>
 
 namespace stellar
@@ -128,6 +127,22 @@ assetToString(const Asset& asset)
     }
     return r;
 };
+
+inline LedgerKey
+getBucketLedgerKey(HotArchiveBucketEntry const& be)
+{
+    switch (be.type())
+    {
+    case HOT_ARCHIVE_LIVE:
+    case HOT_ARCHIVE_DELETED:
+        return be.key();
+    case HOT_ARCHIVE_ARCHIVED:
+        return LedgerEntryKey(be.archivedEntry());
+    case HOT_ARCHIVE_METAENTRY:
+    default:
+        throw std::invalid_argument("Tried to get key for METAENTRY");
+    }
+}
 
 inline LedgerKey
 getBucketLedgerKey(BucketEntry const& be)

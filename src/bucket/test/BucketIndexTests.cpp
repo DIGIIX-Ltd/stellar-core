@@ -5,9 +5,9 @@
 // This file contains tests for the BucketIndex and higher-level operations
 // concerning key-value lookup based on the BucketList.
 
-#include "bucket/BucketIndexImpl.h"
-#include "bucket/BucketList.h"
 #include "bucket/BucketManager.h"
+#include "bucket/BucketSnapshotManager.h"
+#include "bucket/LiveBucketList.h"
 #include "bucket/test/BucketTestUtils.h"
 #include "ledger/test/LedgerTestUtils.h"
 #include "lib/catch.hpp"
@@ -15,9 +15,10 @@
 #include "main/Config.h"
 #include "test/test.h"
 
-#include "lib/bloom_filter.hpp"
-
+#include "util/UnorderedMap.h"
+#include "util/UnorderedSet.h"
 #include "util/XDRCereal.h"
+#include "util/types.h"
 
 using namespace stellar;
 using namespace BucketTestUtils;
@@ -72,7 +73,7 @@ class BucketIndexTest
                     {CONFIG_SETTING}, 10);
             f(entries);
             closeLedger(*mApp);
-        } while (!BucketList::levelShouldSpill(ledger, mLevelsToBuild - 1));
+        } while (!LiveBucketList::levelShouldSpill(ledger, mLevelsToBuild - 1));
     }
 
   public:
@@ -110,8 +111,60 @@ class BucketIndexTest
         buildBucketList(f);
     }
 
+    void
+    runHistoricalSnapshotTest()
+    {
+        uint32_t ledger = 0;
+        auto canonicalEntry =
+            LedgerTestUtils::generateValidLedgerEntryWithExclusions(
+                {LedgerEntryType::CONFIG_SETTING});
+        canonicalEntry.lastModifiedLedgerSeq = 0;
+
+        do
+        {
+            ++ledger;
+            auto entryCopy = canonicalEntry;
+            entryCopy.lastModifiedLedgerSeq = ledger;
+            mApp->getLedgerManager().setNextLedgerEntryBatchForBucketTesting(
+                {}, {entryCopy}, {});
+            closeLedger(*mApp);
+        } while (ledger < mApp->getConfig().QUERY_SNAPSHOT_LEDGERS + 2);
+        ++ledger;
+
+        auto searchableBL = getBM()
+                                .getBucketSnapshotManager()
+                                .copySearchableLiveBucketListSnapshot();
+        auto lk = LedgerEntryKey(canonicalEntry);
+
+        auto currentLoadedEntry = searchableBL->load(lk);
+        REQUIRE(currentLoadedEntry);
+
+        // Note: The definition of "historical snapshot" ledger is that the
+        // BucketList snapshot for ledger N is the BucketList as it exists at
+        // the beginning of ledger N. This means that the lastModifiedLedgerSeq
+        // is at most N - 1.
+        REQUIRE(currentLoadedEntry->lastModifiedLedgerSeq == ledger - 1);
+
+        for (uint32_t currLedger = ledger; currLedger > 0; --currLedger)
+        {
+            auto loadRes = searchableBL->loadKeysFromLedger({lk}, currLedger);
+
+            // If we query an older snapshot, should return <null, notFound>
+            if (currLedger < ledger - mApp->getConfig().QUERY_SNAPSHOT_LEDGERS)
+            {
+                REQUIRE(!loadRes);
+            }
+            else
+            {
+                REQUIRE(loadRes);
+                REQUIRE(loadRes->size() == 1);
+                REQUIRE(loadRes->at(0).lastModifiedLedgerSeq == currLedger - 1);
+            }
+        }
+    }
+
     virtual void
-    buildShadowTest()
+    buildMultiVersionTest()
     {
         std::vector<LedgerKey> toDestroy;
         std::vector<LedgerEntry> toUpdate;
@@ -197,15 +250,20 @@ class BucketIndexTest
     virtual void
     run()
     {
+        auto searchableBL = getBM()
+                                .getBucketSnapshotManager()
+                                .copySearchableLiveBucketListSnapshot();
+
         // Test bulk load lookup
-        auto loadResult = getBM().loadKeys(mKeysToSearch);
+        auto loadResult =
+            searchableBL->loadKeysWithLimits(mKeysToSearch, nullptr);
         validateResults(mTestEntries, loadResult);
 
         // Test individual entry lookup
         loadResult.clear();
         for (auto const& key : mKeysToSearch)
         {
-            auto entryPtr = getBM().getLedgerEntry(key);
+            auto entryPtr = searchableBL->load(key);
             if (entryPtr)
             {
                 loadResult.emplace_back(*entryPtr);
@@ -219,6 +277,9 @@ class BucketIndexTest
     virtual void
     runPerf(size_t n)
     {
+        auto searchableBL = getBM()
+                                .getBucketSnapshotManager()
+                                .copySearchableLiveBucketListSnapshot();
         for (size_t i = 0; i < n; ++i)
         {
             LedgerKeySet searchSubset;
@@ -247,7 +308,8 @@ class BucketIndexTest
                 searchSubset.insert(addKeys.begin(), addKeys.end());
             }
 
-            auto blLoad = getBM().loadKeys(searchSubset);
+            auto blLoad =
+                searchableBL->loadKeysWithLimits(searchSubset, nullptr);
             validateResults(testEntriesSubset, blLoad);
         }
     }
@@ -255,6 +317,10 @@ class BucketIndexTest
     void
     testInvalidKeys()
     {
+        auto searchableBL = getBM()
+                                .getBucketSnapshotManager()
+                                .copySearchableLiveBucketListSnapshot();
+
         // Load should return empty vector for keys not in bucket list
         auto keysNotInBL =
             LedgerTestUtils::generateValidLedgerEntryKeysWithExclusions(
@@ -262,12 +328,13 @@ class BucketIndexTest
         LedgerKeySet invalidKeys(keysNotInBL.begin(), keysNotInBL.end());
 
         // Test bulk load
-        REQUIRE(getBM().loadKeys(invalidKeys).size() == 0);
+        REQUIRE(searchableBL->loadKeysWithLimits(invalidKeys, nullptr).size() ==
+                0);
 
         // Test individual load
         for (auto const& key : invalidKeys)
         {
-            auto entryPtr = getBM().getLedgerEntry(key);
+            auto entryPtr = searchableBL->load(key);
             REQUIRE(!entryPtr);
         }
     }
@@ -308,13 +375,30 @@ class BucketIndexPoolShareTest : public BucketIndexTest
     }
 
     void
-    buildTest(bool shouldShadow)
+    buildTest(bool shouldMultiVersion)
     {
         auto f = [&](std::vector<LedgerEntry>& entries) {
-            std::vector<LedgerKey> toShadow;
+            std::vector<LedgerEntry> poolEntries;
+            std::vector<LedgerKey> toWriteNewVersion;
             if (mDist(gRandomEngine) < 30)
             {
-                auto pool = LedgerTestUtils::generateValidLiquidityPoolEntry();
+                // Make sure we generate a unique poolID for each entry
+                LiquidityPoolEntry pool;
+                for (;;)
+                {
+                    pool = LedgerTestUtils::generateValidLiquidityPoolEntry();
+                    for (auto e : poolEntries)
+                    {
+                        if (e.data.liquidityPool().liquidityPoolID ==
+                            pool.liquidityPoolID)
+                        {
+                            continue;
+                        }
+                    }
+
+                    break;
+                }
+
                 auto& params = pool.body.constantProduct().params;
 
                 auto trustlineToSearch =
@@ -348,21 +432,33 @@ class BucketIndexPoolShareTest : public BucketIndexTest
                 LedgerEntry poolEntry;
                 poolEntry.data.type(LIQUIDITY_POOL);
                 poolEntry.data.liquidityPool() = pool;
-                entries.emplace_back(poolEntry);
+                poolEntries.emplace_back(poolEntry);
                 entries.emplace_back(trustlineToSearch);
                 entries.emplace_back(trustline2);
             }
-            else if (shouldShadow && mDist(gRandomEngine) < 10 &&
+            // Write new version via delete
+            else if (shouldMultiVersion && mDist(gRandomEngine) < 10 &&
                      !mTestEntries.empty())
             {
-                // Arbitrarily shadow first entry of map
+                // Arbitrarily pcik first entry of map
                 auto iter = mTestEntries.begin();
-                toShadow.emplace_back(iter->first);
+                toWriteNewVersion.emplace_back(iter->first);
                 mTestEntries.erase(iter);
             }
+            // Write new version via modify
+            else if (shouldMultiVersion && mDist(gRandomEngine) < 10 &&
+                     !mTestEntries.empty())
+            {
+                // Arbitrarily pick first entry of map
+                auto iter = mTestEntries.begin();
+                iter->second.data.trustLine().balance += 10;
+                entries.emplace_back(iter->second);
+            }
 
+            // We only index liquidity pool INITENTRY, so they must be inserted
+            // as INITENTRY
             mApp->getLedgerManager().setNextLedgerEntryBatchForBucketTesting(
-                {}, entries, toShadow);
+                poolEntries, entries, toWriteNewVersion);
         };
 
         BucketIndexTest::buildBucketList(f);
@@ -390,7 +486,7 @@ class BucketIndexPoolShareTest : public BucketIndexTest
     }
 
     virtual void
-    buildShadowTest() override
+    buildMultiVersionTest() override
     {
         buildTest(true);
     }
@@ -398,8 +494,12 @@ class BucketIndexPoolShareTest : public BucketIndexTest
     virtual void
     run() override
     {
-        auto loadResult = getBM().loadPoolShareTrustLinesByAccountAndAsset(
-            mAccountToSearch.accountID, mAssetToSearch);
+        auto searchableBL = getBM()
+                                .getBucketSnapshotManager()
+                                .copySearchableLiveBucketListSnapshot();
+        auto loadResult =
+            searchableBL->loadPoolShareTrustLinesByAccountAndAsset(
+                mAccountToSearch.accountID, mAssetToSearch);
         validateResults(mTestEntries, loadResult);
     }
 };
@@ -410,26 +510,23 @@ testAllIndexTypes(std::function<void(Config&)> f)
     SECTION("individual index only")
     {
         Config cfg(getTestConfig());
-        cfg.EXPERIMENTAL_BUCKETLIST_DB = true;
-        cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT = 0;
+        cfg.BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT = 0;
         f(cfg);
     }
 
     SECTION("individual and range index")
     {
         Config cfg(getTestConfig());
-        cfg.EXPERIMENTAL_BUCKETLIST_DB = true;
 
         // First 3 levels individual, last 3 range index
-        cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_CUTOFF = 1;
+        cfg.BUCKETLIST_DB_INDEX_CUTOFF = 1;
         f(cfg);
     }
 
     SECTION("range index only")
     {
         Config cfg(getTestConfig());
-        cfg.EXPERIMENTAL_BUCKETLIST_DB = true;
-        cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_CUTOFF = 0;
+        cfg.BUCKETLIST_DB_INDEX_CUTOFF = 0;
         f(cfg);
     }
 }
@@ -446,12 +543,23 @@ TEST_CASE("key-value lookup", "[bucket][bucketindex]")
     testAllIndexTypes(f);
 }
 
-TEST_CASE("do not load shadowed values", "[bucket][bucketindex]")
+TEST_CASE("do not load outdated values", "[bucket][bucketindex]")
 {
     auto f = [&](Config& cfg) {
         auto test = BucketIndexTest(cfg);
-        test.buildShadowTest();
+        test.buildMultiVersionTest();
         test.run();
+    };
+
+    testAllIndexTypes(f);
+}
+
+TEST_CASE("load from historical snapshots", "[bucket][bucketindex]")
+{
+    auto f = [&](Config& cfg) {
+        cfg.QUERY_SNAPSHOT_LEDGERS = 5;
+        auto test = BucketIndexTest(cfg);
+        test.runHistoricalSnapshotTest();
     };
 
     testAllIndexTypes(f);
@@ -468,12 +576,13 @@ TEST_CASE("loadPoolShareTrustLinesByAccountAndAsset", "[bucket][bucketindex]")
     testAllIndexTypes(f);
 }
 
-TEST_CASE("loadPoolShareTrustLinesByAccountAndAsset does not load shadows",
-          "[bucket][bucketindex]")
+TEST_CASE(
+    "loadPoolShareTrustLinesByAccountAndAsset does not load outdated versions",
+    "[bucket][bucketindex]")
 {
     auto f = [&](Config& cfg) {
         auto test = BucketIndexPoolShareTest(cfg);
-        test.buildShadowTest();
+        test.buildMultiVersionTest();
         test.run();
     };
 
@@ -492,24 +601,34 @@ TEST_CASE("ContractData key with same ScVal", "[bucket][bucketindex]")
     testAllIndexTypes(f);
 }
 
-TEST_CASE("serialize bucket indexes", "[bucket][bucketindex][!hide]")
+TEST_CASE("serialize bucket indexes", "[bucket][bucketindex]")
 {
-    Config cfg(getTestConfig(0, Config::TESTDB_ON_DISK_SQLITE));
+    Config cfg(getTestConfig(0, Config::TESTDB_BUCKET_DB_PERSISTENT));
 
-    // First 3 levels individual, last 3 range index
-    cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_CUTOFF = 1;
-    cfg.EXPERIMENTAL_BUCKETLIST_DB = true;
-    cfg.EXPERIMENTAL_BUCKETLIST_DB_PERSIST_INDEX = true;
+    // All levels use range config
+    cfg.BUCKETLIST_DB_INDEX_CUTOFF = 0;
+    cfg.BUCKETLIST_DB_PERSIST_INDEX = true;
+    cfg.INVARIANT_CHECKS = {};
 
     // Node is not a validator, so indexes will persist
     cfg.NODE_IS_VALIDATOR = false;
     cfg.FORCE_SCP = false;
 
-    auto test = BucketIndexTest(cfg);
+    auto test = BucketIndexTest(cfg, /*levels=*/3);
     test.buildGeneralTest();
 
-    auto buckets = test.getBM().getBucketListReferencedBuckets();
-    for (auto const& bucketHash : buckets)
+    std::set<Hash> liveBuckets;
+    auto& liveBL = test.getBM().getLiveBucketList();
+    for (auto i = 0; i < LiveBucketList::kNumLevels; ++i)
+    {
+        auto level = liveBL.getLevel(i);
+        for (auto const& b : {level.getCurr(), level.getSnap()})
+        {
+            liveBuckets.emplace(b->getHash());
+        }
+    }
+
+    for (auto const& bucketHash : liveBuckets)
     {
         if (isZero(bucketHash))
         {
@@ -520,7 +639,7 @@ TEST_CASE("serialize bucket indexes", "[bucket][bucketindex][!hide]")
         auto indexFilename = test.getBM().bucketIndexFilename(bucketHash);
         REQUIRE(fs::exists(indexFilename));
 
-        auto b = test.getBM().getBucketByHash(bucketHash);
+        auto b = test.getBM().getBucketByHash<LiveBucket>(bucketHash);
         REQUIRE(b->isIndexed());
 
         auto onDiskIndex =
@@ -534,11 +653,11 @@ TEST_CASE("serialize bucket indexes", "[bucket][bucketindex][!hide]")
     // Restart app with different config to test that indexes created with
     // different config settings are not loaded from disk. These params will
     // invalidate every index in BL
-    cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_CUTOFF = 0;
-    cfg.EXPERIMENTAL_BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT = 10;
+    cfg.BUCKETLIST_DB_INDEX_CUTOFF = 0;
+    cfg.BUCKETLIST_DB_INDEX_PAGE_SIZE_EXPONENT = 10;
     test.restartWithConfig(cfg);
 
-    for (auto const& bucketHash : buckets)
+    for (auto const& bucketHash : liveBuckets)
     {
         if (isZero(bucketHash))
         {
@@ -546,12 +665,23 @@ TEST_CASE("serialize bucket indexes", "[bucket][bucketindex][!hide]")
         }
 
         // Check if in-memory index has correct params
-        auto b = test.getBM().getBucketByHash(bucketHash);
+        auto b = test.getBM().getBucketByHash<LiveBucket>(bucketHash);
         REQUIRE(!b->isEmpty());
         REQUIRE(b->isIndexed());
 
         auto& inMemoryIndex = b->getIndexForTesting();
         REQUIRE(inMemoryIndex.getPageSize() == (1UL << 10));
+        auto inMemoryCoutners = inMemoryIndex.getBucketEntryCounters();
+        // Ensure the inMemoryIndex has some non-zero counters.
+        REQUIRE(!inMemoryCoutners.entryTypeCounts.empty());
+        REQUIRE(!inMemoryCoutners.entryTypeSizes.empty());
+        bool allZero = true;
+        for (auto const& [k, v] : inMemoryCoutners.entryTypeCounts)
+        {
+            allZero = allZero && (v == 0);
+            allZero = allZero && (inMemoryCoutners.entryTypeSizes.at(k) == 0);
+        }
+        REQUIRE(!allZero);
 
         // Check if on-disk index rewritten with correct config params
         auto indexFilename = test.getBM().bucketIndexFilename(bucketHash);
@@ -559,5 +689,217 @@ TEST_CASE("serialize bucket indexes", "[bucket][bucketindex][!hide]")
             BucketIndex::load(test.getBM(), indexFilename, b->getSize());
         REQUIRE((inMemoryIndex == *onDiskIndex));
     }
+}
+
+// The majority of BucketListDB functionality is shared by all bucketlist types.
+// This test is a simple sanity check and tests the interface differences
+// between the live bucketlist and the hot archive bucketlist.
+TEST_CASE("hot archive bucket lookups", "[bucket][bucketindex][archive]")
+{
+    auto f = [&](Config& cfg) {
+        auto clock = VirtualClock();
+        auto app = createTestApplication<BucketTestApplication>(clock, cfg);
+
+        UnorderedMap<LedgerKey, LedgerEntry> expectedArchiveEntries;
+        UnorderedSet<LedgerKey> expectedDeletedEntries;
+        UnorderedSet<LedgerKey> expectedRestoredEntries;
+        UnorderedSet<LedgerKey> keysToSearch;
+
+        auto ledger = 1;
+
+        // Use snapshot across ledger to test update behavior
+        auto searchableBL = app->getBucketManager()
+                                .getBucketSnapshotManager()
+                                .copySearchableHotArchiveBucketListSnapshot();
+
+        auto checkLoad = [&](LedgerKey const& k,
+                             std::shared_ptr<HotArchiveBucketEntry> entryPtr) {
+            // Restored entries should be null
+            if (expectedRestoredEntries.find(k) !=
+                expectedRestoredEntries.end())
+            {
+                REQUIRE(!entryPtr);
+            }
+
+            // Deleted entries should be HotArchiveBucketEntry of type
+            // DELETED
+            else if (expectedDeletedEntries.find(k) !=
+                     expectedDeletedEntries.end())
+            {
+                REQUIRE(entryPtr);
+                REQUIRE(entryPtr->type() ==
+                        HotArchiveBucketEntryType::HOT_ARCHIVE_DELETED);
+                REQUIRE(entryPtr->key() == k);
+            }
+
+            // Archived entries should contain full LedgerEntry
+            else
+            {
+                auto expectedIter = expectedArchiveEntries.find(k);
+                REQUIRE(expectedIter != expectedArchiveEntries.end());
+                REQUIRE(entryPtr);
+                REQUIRE(entryPtr->type() ==
+                        HotArchiveBucketEntryType::HOT_ARCHIVE_ARCHIVED);
+                REQUIRE(entryPtr->archivedEntry() == expectedIter->second);
+            }
+        };
+
+        auto checkResult = [&] {
+            LedgerKeySet bulkLoadKeys;
+            for (auto const& k : keysToSearch)
+            {
+                auto entryPtr = searchableBL->load(k);
+                checkLoad(k, entryPtr);
+                bulkLoadKeys.emplace(k);
+            }
+
+            auto bulkLoadResult = searchableBL->loadKeys(bulkLoadKeys);
+            for (auto entry : bulkLoadResult)
+            {
+                if (entry.type() == HOT_ARCHIVE_DELETED)
+                {
+                    auto k = entry.key();
+                    auto iter = expectedDeletedEntries.find(k);
+                    REQUIRE(iter != expectedDeletedEntries.end());
+                    expectedDeletedEntries.erase(iter);
+                }
+                else
+                {
+                    REQUIRE(entry.type() == HOT_ARCHIVE_ARCHIVED);
+                    auto le = entry.archivedEntry();
+                    auto k = LedgerEntryKey(le);
+                    auto iter = expectedArchiveEntries.find(k);
+                    REQUIRE(iter != expectedArchiveEntries.end());
+                    REQUIRE(iter->second == le);
+                    expectedArchiveEntries.erase(iter);
+                }
+            }
+
+            REQUIRE(expectedDeletedEntries.empty());
+            REQUIRE(expectedArchiveEntries.empty());
+        };
+
+        auto archivedEntries =
+            LedgerTestUtils::generateValidUniqueLedgerEntriesWithTypes(
+                {CONTRACT_DATA, CONTRACT_CODE}, 10);
+        for (auto const& e : archivedEntries)
+        {
+            auto k = LedgerEntryKey(e);
+            expectedArchiveEntries.emplace(k, e);
+            keysToSearch.emplace(k);
+        }
+
+        // Note: keys to search automatically populated by these functions
+        auto deletedEntries =
+            LedgerTestUtils::generateValidUniqueLedgerKeysWithTypes(
+                {CONTRACT_DATA, CONTRACT_CODE}, 10, keysToSearch);
+        for (auto const& k : deletedEntries)
+        {
+            expectedDeletedEntries.emplace(k);
+        }
+
+        auto restoredEntries =
+            LedgerTestUtils::generateValidUniqueLedgerKeysWithTypes(
+                {CONTRACT_DATA, CONTRACT_CODE}, 10, keysToSearch);
+        for (auto const& k : restoredEntries)
+        {
+            expectedRestoredEntries.emplace(k);
+        }
+
+        auto header =
+            app->getLedgerManager().getLastClosedLedgerHeader().header;
+        header.ledgerSeq += 1;
+        header.ledgerVersion = static_cast<uint32_t>(
+            BucketBase::FIRST_PROTOCOL_SUPPORTING_PERSISTENT_EVICTION);
+        addHotArchiveBatchAndUpdateSnapshot(*app, header, archivedEntries,
+                                            restoredEntries, deletedEntries);
+        app->getBucketManager()
+            .getBucketSnapshotManager()
+            .maybeCopySearchableHotArchiveBucketListSnapshot(searchableBL);
+        checkResult();
+
+        // Add a few batches so that entries are no longer in the top bucket
+        for (auto i = 0; i < 100; ++i)
+        {
+            header.ledgerSeq += 1;
+            addHotArchiveBatchAndUpdateSnapshot(*app, header, {}, {}, {});
+            app->getBucketManager()
+                .getBucketSnapshotManager()
+                .maybeCopySearchableHotArchiveBucketListSnapshot(searchableBL);
+        }
+
+        // Shadow entries via liveEntry
+        auto liveShadow1 = LedgerEntryKey(archivedEntries[0]);
+        auto liveShadow2 = deletedEntries[1];
+
+        header.ledgerSeq += 1;
+        addHotArchiveBatchAndUpdateSnapshot(*app, header, {},
+                                            {liveShadow1, liveShadow2}, {});
+        app->getBucketManager()
+            .getBucketSnapshotManager()
+            .maybeCopySearchableHotArchiveBucketListSnapshot(searchableBL);
+
+        // Point load
+        for (auto const& k : {liveShadow1, liveShadow2})
+        {
+            auto entryPtr = searchableBL->load(k);
+            REQUIRE(!entryPtr);
+        }
+
+        // Bulk load
+        auto bulkLoadResult =
+            searchableBL->loadKeys({liveShadow1, liveShadow2});
+        REQUIRE(bulkLoadResult.size() == 0);
+
+        // Shadow via deletedEntry
+        auto deletedShadow = LedgerEntryKey(archivedEntries[1]);
+
+        header.ledgerSeq += 1;
+        addHotArchiveBatchAndUpdateSnapshot(*app, header, {}, {},
+                                            {deletedShadow});
+        app->getBucketManager()
+            .getBucketSnapshotManager()
+            .maybeCopySearchableHotArchiveBucketListSnapshot(searchableBL);
+
+        // Point load
+        auto entryPtr = searchableBL->load(deletedShadow);
+        REQUIRE(entryPtr);
+        REQUIRE(entryPtr->type() ==
+                HotArchiveBucketEntryType::HOT_ARCHIVE_DELETED);
+        REQUIRE(entryPtr->key() == deletedShadow);
+
+        // Bulk load
+        auto bulkLoadResult2 = searchableBL->loadKeys({deletedShadow});
+        REQUIRE(bulkLoadResult2.size() == 1);
+        REQUIRE(bulkLoadResult2[0].type() == HOT_ARCHIVE_DELETED);
+        REQUIRE(bulkLoadResult2[0].key() == deletedShadow);
+
+        // Shadow via archivedEntry
+        auto archivedShadow = archivedEntries[3];
+        archivedShadow.lastModifiedLedgerSeq = ledger;
+
+        header.ledgerSeq += 1;
+        addHotArchiveBatchAndUpdateSnapshot(*app, header, {archivedShadow}, {},
+                                            {});
+        app->getBucketManager()
+            .getBucketSnapshotManager()
+            .maybeCopySearchableHotArchiveBucketListSnapshot(searchableBL);
+
+        // Point load
+        entryPtr = searchableBL->load(LedgerEntryKey(archivedShadow));
+        REQUIRE(entryPtr);
+        REQUIRE(entryPtr->type() ==
+                HotArchiveBucketEntryType::HOT_ARCHIVE_ARCHIVED);
+        REQUIRE(entryPtr->archivedEntry() == archivedShadow);
+
+        // Bulk load
+        auto bulkLoadResult3 =
+            searchableBL->loadKeys({LedgerEntryKey(archivedShadow)});
+        REQUIRE(bulkLoadResult3.size() == 1);
+        REQUIRE(bulkLoadResult3[0].type() == HOT_ARCHIVE_ARCHIVED);
+        REQUIRE(bulkLoadResult3[0].archivedEntry() == archivedShadow);
+    };
+
+    testAllIndexTypes(f);
 }
 }

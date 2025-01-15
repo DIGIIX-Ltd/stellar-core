@@ -24,7 +24,6 @@
 #include "history/HistoryManager.h"
 #include "ledger/LedgerHeaderUtils.h"
 #include "ledger/LedgerTxn.h"
-#include "main/ExternalQueue.h"
 #include "main/PersistentState.h"
 #include "overlay/BanManager.h"
 #include "overlay/OverlayManager.h"
@@ -61,17 +60,13 @@ using namespace std;
 
 bool Database::gDriversRegistered = false;
 
-// smallest schema version supported
-static unsigned long const MIN_SCHEMA_VERSION = 13;
-static unsigned long const SCHEMA_VERSION = 21;
-
 // These should always match our compiled version precisely, since we are
 // using a bundled version to get access to carray(). But in case someone
 // overrides that or our build configuration changes, it's nicer to get a
 // more-precise version-mismatch error message than a runtime crash due
 // to using SQLite features that aren't supported on an old version.
 static int const MIN_SQLITE_MAJOR_VERSION = 3;
-static int const MIN_SQLITE_MINOR_VERSION = 26;
+static int const MIN_SQLITE_MINOR_VERSION = 45;
 static int const MIN_SQLITE_VERSION =
     (1000000 * MIN_SQLITE_MAJOR_VERSION) + (1000 * MIN_SQLITE_MINOR_VERSION);
 
@@ -185,6 +180,7 @@ Database::Database(Application& app)
     : mApp(app)
     , mQueryMeter(
           app.getMetrics().NewMeter({"database", "query", "exec"}, "query"))
+    , mSession("main")
     , mStatementsSize(
           app.getMetrics().NewCounter({"database", "memory", "statements"}))
 {
@@ -199,46 +195,29 @@ Database::Database(Application& app)
 void
 Database::open()
 {
-    mSession.open(mApp.getConfig().DATABASE.value);
-    DatabaseConfigureSessionOp op(mSession);
-    doDatabaseTypeSpecificOperation(op);
+    mSession.session().open(mApp.getConfig().DATABASE.value);
+    DatabaseConfigureSessionOp op(mSession.session());
+    doDatabaseTypeSpecificOperation(op, mSession);
 }
 
 void
 Database::applySchemaUpgrade(unsigned long vers)
 {
-    clearPreparedStatementCache();
+    clearPreparedStatementCache(mSession);
 
-    soci::transaction tx(mSession);
+    soci::transaction tx(mSession.session());
     switch (vers)
     {
-    case 14:
-        mApp.getPersistentState().setRebuildForType(OFFER);
+    case 22:
+        dropSupportTransactionFeeHistory(*this);
         break;
-    case 15:
-        mApp.getPersistentState().setRebuildForType(TRUSTLINE);
-        mApp.getPersistentState().setRebuildForType(LIQUIDITY_POOL);
+    case 23:
+        mApp.getHistoryManager().dropSQLBasedPublish();
+        Upgrades::dropSupportUpgradeHistory(*this);
         break;
-    case 16:
-        mApp.getPersistentState().setRebuildForType(LIQUIDITY_POOL);
-        break;
-    case 17:
-        mApp.getPersistentState().setRebuildForType(OFFER);
-        break;
-    case 18:
-        createTxSetHistoryTable(*this);
-        mApp.getPersistentState().upgradeSCPDataFormat();
-        break;
-    case 19:
-        mApp.getPersistentState().upgradeSCPDataV1Format();
-        break;
-    case 20:
-        mApp.getPersistentState().setRebuildForType(CONFIG_SETTING);
-        mApp.getPersistentState().setRebuildForType(CONTRACT_DATA);
-        mApp.getPersistentState().setRebuildForType(CONTRACT_CODE);
-        break;
-    case 21:
-        mApp.getPersistentState().setRebuildForType(TTL);
+    case 24:
+        getRawSession() << "DROP TABLE IF EXISTS pubsub;";
+        mApp.getPersistentState().migrateToSlotStateTable();
         break;
     default:
         throw std::runtime_error("Unknown DB schema version");
@@ -272,25 +251,76 @@ Database::upgradeToCurrentSchema()
         applySchemaUpgrade(vers);
         putSchemaVersion(vers);
     }
+
+    maybeUpgradeToBucketListDB();
+
     CLOG_INFO(Database, "DB schema is in current version");
     releaseAssert(vers == SCHEMA_VERSION);
+}
+
+void
+Database::maybeUpgradeToBucketListDB()
+{
+    if (mApp.getPersistentState().getState(PersistentState::kDBBackend,
+                                           getSession()) !=
+        BucketIndex::DB_BACKEND_STATE)
+    {
+        CLOG_INFO(Database, "Upgrading to BucketListDB");
+
+        // Drop all LedgerEntry tables except for offers
+        CLOG_INFO(Database, "Dropping table accounts");
+        getRawSession() << "DROP TABLE IF EXISTS accounts;";
+
+        CLOG_INFO(Database, "Dropping table signers");
+        getRawSession() << "DROP TABLE IF EXISTS signers;";
+
+        CLOG_INFO(Database, "Dropping table claimablebalance");
+        getRawSession() << "DROP TABLE IF EXISTS claimablebalance;";
+
+        CLOG_INFO(Database, "Dropping table configsettings");
+        getRawSession() << "DROP TABLE IF EXISTS configsettings;";
+
+        CLOG_INFO(Database, "Dropping table contractcode");
+        getRawSession() << "DROP TABLE IF EXISTS contractcode;";
+
+        CLOG_INFO(Database, "Dropping table contractdata");
+        getRawSession() << "DROP TABLE IF EXISTS contractdata;";
+
+        CLOG_INFO(Database, "Dropping table accountdata");
+        getRawSession() << "DROP TABLE IF EXISTS accountdata;";
+
+        CLOG_INFO(Database, "Dropping table liquiditypool");
+        getRawSession() << "DROP TABLE IF EXISTS liquiditypool;";
+
+        CLOG_INFO(Database, "Dropping table trustlines");
+        getRawSession() << "DROP TABLE IF EXISTS trustlines;";
+
+        CLOG_INFO(Database, "Dropping table ttl");
+        getRawSession() << "DROP TABLE IF EXISTS ttl;";
+
+        mApp.getPersistentState().setState(PersistentState::kDBBackend,
+                                           BucketIndex::DB_BACKEND_STATE,
+                                           getSession());
+    }
 }
 
 void
 Database::putSchemaVersion(unsigned long vers)
 {
     mApp.getPersistentState().setState(PersistentState::kDatabaseSchema,
-                                       std::to_string(vers));
+                                       std::to_string(vers),
+                                       mApp.getDatabase().getSession());
 }
 
 unsigned long
 Database::getDBSchemaVersion()
 {
+    releaseAssert(threadIsMain());
     unsigned long vers = 0;
     try
     {
         auto vstr = mApp.getPersistentState().getState(
-            PersistentState::kDatabaseSchema);
+            PersistentState::kDatabaseSchema, getSession());
         vers = std::stoul(vstr);
     }
     catch (...)
@@ -304,16 +334,9 @@ Database::getDBSchemaVersion()
     return vers;
 }
 
-unsigned long
-Database::getAppSchemaVersion()
-{
-    return SCHEMA_VERSION;
-}
-
 medida::TimerContext
 Database::getInsertTimer(std::string const& entityName)
 {
-    mEntityTypes.insert(entityName);
     mQueryMeter.Mark();
     return mApp.getMetrics()
         .NewTimer({"database", "insert", entityName})
@@ -323,7 +346,6 @@ Database::getInsertTimer(std::string const& entityName)
 medida::TimerContext
 Database::getSelectTimer(std::string const& entityName)
 {
-    mEntityTypes.insert(entityName);
     mQueryMeter.Mark();
     return mApp.getMetrics()
         .NewTimer({"database", "select", entityName})
@@ -333,7 +355,6 @@ Database::getSelectTimer(std::string const& entityName)
 medida::TimerContext
 Database::getDeleteTimer(std::string const& entityName)
 {
-    mEntityTypes.insert(entityName);
     mQueryMeter.Mark();
     return mApp.getMetrics()
         .NewTimer({"database", "delete", entityName})
@@ -343,7 +364,6 @@ Database::getDeleteTimer(std::string const& entityName)
 medida::TimerContext
 Database::getUpdateTimer(std::string const& entityName)
 {
-    mEntityTypes.insert(entityName);
     mQueryMeter.Mark();
     return mApp.getMetrics()
         .NewTimer({"database", "update", entityName})
@@ -353,7 +373,6 @@ Database::getUpdateTimer(std::string const& entityName)
 medida::TimerContext
 Database::getUpsertTimer(std::string const& entityName)
 {
-    mEntityTypes.insert(entityName);
     mQueryMeter.Mark();
     return mApp.getMetrics()
         .NewTimer({"database", "upsert", entityName})
@@ -365,7 +384,8 @@ Database::setCurrentTransactionReadOnly()
 {
     if (!isSqlite())
     {
-        auto prep = getPreparedStatement("SET TRANSACTION READ ONLY");
+        auto prep =
+            getPreparedStatement("SET TRANSACTION READ ONLY", getSession());
         auto& st = prep.statement();
         st.define_and_bind();
         st.execute(false);
@@ -401,14 +421,31 @@ Database::canUsePool() const
 void
 Database::clearPreparedStatementCache()
 {
+    std::lock_guard<std::mutex> lock(mStatementsMutex);
+    for (auto& c : mCaches)
+    {
+        for (auto& st : c.second)
+        {
+            st.second->clean_up(true);
+        }
+    }
+    mCaches.clear();
+    mStatementsSize.set_count(0);
+}
+
+void
+Database::clearPreparedStatementCache(SessionWrapper& session)
+{
+    std::lock_guard<std::mutex> lock(mStatementsMutex);
+
     // Flush all prepared statements; in sqlite they represent open cursors
     // and will conflict with any DROP TABLE commands issued below
-    for (auto st : mStatements)
+    for (auto st : mCaches[session.getSessionName()])
     {
         st.second->clean_up(true);
+        mStatementsSize.dec();
     }
-    mStatements.clear();
-    mStatementsSize.set_count(mStatements.size());
+    mCaches.erase(session.getSessionName());
 }
 
 void
@@ -424,8 +461,9 @@ Database::initialize()
             int i;
             std::string databaseName, databaseLocation;
             soci::statement st =
-                (mSession.prepare << "PRAGMA database_list;", soci::into(i),
-                 soci::into(databaseName), soci::into(databaseLocation));
+                (getRawSession().prepare << "PRAGMA database_list;",
+                 soci::into(i), soci::into(databaseName),
+                 soci::into(databaseLocation));
             st.execute(true);
             while (st.got_data())
             {
@@ -438,7 +476,7 @@ Database::initialize()
         }
         if (!fn.empty() && fs::exists(fn))
         {
-            mSession.close();
+            getRawSession().close();
             std::remove(fn.c_str());
             open();
         }
@@ -448,29 +486,35 @@ Database::initialize()
 
     // only time this section should be modified is when
     // consolidating changes found in applySchemaUpgrade here
-    Upgrades::dropAll(*this);
+    Upgrades::dropSupportUpgradeHistory(*this);
     OverlayManager::dropAll(*this);
     PersistentState::dropAll(*this);
-    ExternalQueue::dropAll(*this);
     LedgerHeaderUtils::dropAll(*this);
-    dropTransactionHistory(*this);
+    // No need to re-create txhistory, will be dropped during
+    // upgradeToCurrentSchema anyway
+    dropSupportTxHistory(*this);
     HistoryManager::dropAll(*this);
     HerderPersistence::dropAll(*this);
     BanManager::dropAll(*this);
     putSchemaVersion(MIN_SCHEMA_VERSION);
-    mApp.getHerderPersistence().createQuorumTrackingTable(mSession);
 
     LOG_INFO(DEFAULT_LOG, "* ");
     LOG_INFO(DEFAULT_LOG, "* The database has been initialized");
     LOG_INFO(DEFAULT_LOG, "* ");
 }
 
-soci::session&
+SessionWrapper&
 Database::getSession()
 {
     // global session can only be used from the main thread
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
     return mSession;
+}
+
+soci::session&
+Database::getRawSession()
+{
+    return getSession().session();
 }
 
 soci::connection_pool&
@@ -539,17 +583,21 @@ class SQLLogContext : NonCopyable
 };
 
 StatementContext
-Database::getPreparedStatement(std::string const& query)
+Database::getPreparedStatement(std::string const& query,
+                               SessionWrapper& session)
 {
-    auto i = mStatements.find(query);
+    std::lock_guard<std::mutex> lock(mStatementsMutex);
+
+    auto& cache = mCaches[session.getSessionName()];
+    auto i = cache.find(query);
     std::shared_ptr<soci::statement> p;
-    if (i == mStatements.end())
+    if (i == cache.end())
     {
-        p = std::make_shared<soci::statement>(mSession);
+        p = std::make_shared<soci::statement>(session.session());
         p->alloc();
         p->prepare(query);
-        mStatements.insert(std::make_pair(query, p));
-        mStatementsSize.set_count(mStatements.size());
+        cache.insert(std::make_pair(query, p));
+        mStatementsSize.inc();
     }
     else
     {
@@ -562,6 +610,6 @@ Database::getPreparedStatement(std::string const& query)
 std::shared_ptr<SQLLogContext>
 Database::captureAndLogSQL(std::string contextName)
 {
-    return make_shared<SQLLogContext>(contextName, mSession);
+    return make_shared<SQLLogContext>(contextName, mSession.session());
 }
 }

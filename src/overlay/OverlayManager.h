@@ -4,8 +4,8 @@
 // under the Apache License, Version 2.0. See the COPYING file at the root
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
+#include "crypto/BLAKE2.h"
 #include "overlay/Peer.h"
-#include "overlay/StellarXDR.h"
 
 /**
  * OverlayManager maintains a virtual broadcast network, consisting of a set of
@@ -23,7 +23,7 @@
  * The `StellarMessage` union contains 3 logically distinct kinds of message:
  *
  *  - Messages directed to or from a specific peer, with or without a response:
- *    HELLO, GET_PEERS, PEERS, DONT_HAVE, ERROR_MSG
+ *    HELLO, PEERS, DONT_HAVE, ERROR_MSG
  *
  *  - One-way broadcast messages informing other peers of an event:
  *    TRANSACTION and SCP_MESSAGE
@@ -50,22 +50,19 @@ class PeerAuth;
 class PeerBareAddress;
 class PeerManager;
 class SurveyManager;
+struct StellarMessage;
 
 class OverlayManager
 {
   public:
-    struct AdjustedFlowControlConfig
-    {
-        uint32_t mTotal;
-        uint32_t mBatchSize;
-    };
-
     static int constexpr MIN_INBOUND_FACTOR = 3;
 
     static std::unique_ptr<OverlayManager> create(Application& app);
 
     // Drop all PeerRecords from the Database
     static void dropAll(Database& db);
+    static bool isFloodMessage(StellarMessage const& msg);
+    static uint32_t getFlowControlBytesBatch(Config const& cfg);
 
     // Flush all FloodGate and ItemFetcher state for ledgers older than
     // `ledgerSeq`.
@@ -76,9 +73,11 @@ class OverlayManager
     // returns true if message was sent to at least one peer
     // When passing a transaction message,
     // the hash of TransactionEnvelope must be passed also for pull mode.
-    virtual bool
-    broadcastMessage(StellarMessage const& msg, bool force = false,
-                     std::optional<Hash> const hash = std::nullopt) = 0;
+    // `minOverlayVersion` is the minimum overlay version a peer must have in
+    // order to be sent the message.
+    virtual bool broadcastMessage(std::shared_ptr<StellarMessage const> msg,
+                                  std::optional<Hash> const hash = std::nullopt,
+                                  uint32_t minOverlayVersion = 0) = 0;
 
     // Make a note in the FloodGate that a given peer has provided us with a
     // given broadcast message, so that it is inhibited from being resent to
@@ -87,19 +86,26 @@ class OverlayManager
     // Returns true if this is a new message
     // fills msgID with msg's hash
     virtual bool recvFloodedMsgID(StellarMessage const& msg, Peer::pointer peer,
-                                  Hash& msgID) = 0;
+                                  Hash const& msgID) = 0;
 
     bool
     recvFloodedMsg(StellarMessage const& msg, Peer::pointer peer)
     {
-        Hash msgID;
-        return recvFloodedMsgID(msg, peer, msgID);
+        return recvFloodedMsgID(msg, peer, xdrBlake2(msg));
     }
+
+    // Process incoming transaction, pass it down to the transaction queue
+    virtual void recvTransaction(StellarMessage const& msg, Peer::pointer peer,
+                                 Hash const& index) = 0;
 
     // removes msgID from the floodgate's internal state
     // as it's not tracked anymore, calling "broadcast" with a (now forgotten)
     // message with the ID msgID will cause it to be broadcast to all peers
     virtual void forgetFloodedMsg(Hash const& msgID) = 0;
+
+    // Process incoming transaction demand; this might trigger sending back a
+    // transaction
+    virtual void recvTxDemand(FloodDemand const& dmd, Peer::pointer peer) = 0;
 
     // Return a list of random peers from the set of authenticated peers.
     virtual std::vector<Peer::pointer> getRandomAuthenticatedPeers() = 0;
@@ -138,8 +144,6 @@ class OverlayManager
     virtual bool isPreferred(Peer* peer) const = 0;
     virtual bool isPossiblyPreferred(std::string const& ip) const = 0;
     virtual bool haveSpaceForConnection(std::string const& ip) const = 0;
-
-    virtual bool isFloodMessage(StellarMessage const& msg) = 0;
 
     // Return the current in-memory set of inbound pending peers.
     virtual std::vector<Peer::pointer> const&
@@ -198,15 +202,16 @@ class OverlayManager
 
     virtual void recordMessageMetric(StellarMessage const& stellarMsg,
                                      Peer::pointer peer) = 0;
-
-    virtual void recordTxPullLatency(Hash const& hash,
-                                     std::shared_ptr<Peer> peer) = 0;
-
-    virtual size_t getMaxAdvertSize() const = 0;
+    virtual uint32_t getFlowControlBytesTotal() const = 0;
 
     virtual ~OverlayManager()
     {
     }
-    virtual AdjustedFlowControlConfig getFlowControlBytesConfig() const = 0;
+
+    // Is message already referenced by the scheduler
+    // This method is always called from one thread, therefore no cache
+    // synchorization is needed
+    virtual bool
+    checkScheduledAndCache(std::shared_ptr<CapacityTrackedMessage> tracker) = 0;
 };
 }

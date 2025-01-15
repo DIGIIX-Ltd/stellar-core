@@ -3,8 +3,8 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 #include "catchup/DownloadApplyTxsWork.h"
-#include "bucket/BucketList.h"
 #include "bucket/BucketManager.h"
+#include "bucket/LiveBucketList.h"
 #include "catchup/ApplyCheckpointWork.h"
 #include "history/FileTransferInfo.h"
 #include "history/HistoryManager.h"
@@ -28,8 +28,8 @@ DownloadApplyTxsWork::DownloadApplyTxsWork(
     , mRange(range)
     , mDownloadDir(downloadDir)
     , mLastApplied(lastApplied)
-    , mCheckpointToQueue(
-          app.getHistoryManager().checkpointContainingLedger(range.mFirst))
+    , mCheckpointToQueue(HistoryManager::checkpointContainingLedger(
+          range.mFirst, app.getConfig()))
     , mWaitForPublish(waitForPublish)
     , mArchive(archive)
 {
@@ -43,17 +43,17 @@ DownloadApplyTxsWork::yieldMoreWork()
     {
         throw std::runtime_error("Work has no more children to iterate over!");
     }
-
     CLOG_INFO(History,
               "Downloading, unzipping and applying {} for checkpoint {}",
-              HISTORY_FILE_TYPE_TRANSACTIONS, mCheckpointToQueue);
-    FileTransferInfo ft(mDownloadDir, HISTORY_FILE_TYPE_TRANSACTIONS,
+              typeString(FileType::HISTORY_FILE_TYPE_TRANSACTIONS),
+              mCheckpointToQueue);
+    FileTransferInfo ft(mDownloadDir, FileType::HISTORY_FILE_TYPE_TRANSACTIONS,
                         mCheckpointToQueue);
     auto getAndUnzip =
         std::make_shared<GetAndUnzipRemoteFileWork>(mApp, ft, mArchive);
 
-    auto const& hm = mApp.getHistoryManager();
-    auto low = hm.firstLedgerInCheckpointContaining(mCheckpointToQueue);
+    auto low = HistoryManager::firstLedgerInCheckpointContaining(
+        mCheckpointToQueue, mApp.getConfig());
     auto high = std::min(mCheckpointToQueue, mRange.last());
 
     TmpDir const& dir = mDownloadDir;
@@ -67,8 +67,8 @@ DownloadApplyTxsWork::yieldMoreWork()
             auto archive = getFile->getArchive();
             if (archive)
             {
-                FileTransferInfo ti(dir, HISTORY_FILE_TYPE_TRANSACTIONS,
-                                    checkpoint);
+                FileTransferInfo ti(
+                    dir, FileType::HISTORY_FILE_TYPE_TRANSACTIONS, checkpoint);
                 CLOG_ERROR(History, "Archive {} maybe contains corrupt file {}",
                            archive->getName(), ti.remoteName());
             }
@@ -79,11 +79,58 @@ DownloadApplyTxsWork::yieldMoreWork()
         mApp, mDownloadDir, LedgerRange::inclusive(low, high), cb);
 
     std::vector<std::shared_ptr<BasicWork>> seq{getAndUnzip};
+    std::vector<FileTransferInfo> filesToTransfer{ft};
+    std::vector<std::shared_ptr<BasicWork>> optionalDownloads;
+#ifdef BUILD_TESTS
+    if (mApp.getConfig().CATCHUP_SKIP_KNOWN_RESULTS_FOR_TESTING)
+    {
+        CLOG_INFO(History,
+                  "Downloading, unzipping and applying {} for checkpoint {}",
+                  typeString(FileType::HISTORY_FILE_TYPE_RESULTS),
+                  mCheckpointToQueue);
+
+        FileTransferInfo resultsFile(mDownloadDir,
+                                     FileType::HISTORY_FILE_TYPE_RESULTS,
+                                     mCheckpointToQueue);
+        auto getResultsWork = std::make_shared<GetAndUnzipRemoteFileWork>(
+            mApp, resultsFile, mArchive, /*logErrorOnFailure=*/false);
+        std::weak_ptr<GetAndUnzipRemoteFileWork> getResultsWorkWeak =
+            getResultsWork;
+        seq.emplace_back(getResultsWork);
+        seq.emplace_back(std::make_shared<WorkWithCallback>(
+            mApp, "get-results-" + std::to_string(mCheckpointToQueue),
+            [apply, getResultsWorkWeak, checkpoint, &dir](Application& app) {
+                auto getResults = getResultsWorkWeak.lock();
+                if (getResults && getResults->getState() != State::WORK_SUCCESS)
+                {
+                    auto archive = getResults->getArchive();
+                    if (archive)
+                    {
+                        FileTransferInfo ti(dir,
+                                            FileType::HISTORY_FILE_TYPE_RESULTS,
+                                            checkpoint);
+                        CLOG_WARNING(
+                            History,
+                            "Archive {} maybe contains corrupt results file "
+                            "{}. "
+                            "This is not fatal as long as the archive contains "
+                            "valid transaction history. Catchup will proceed "
+                            "but"
+                            "the node will not be able to skip known results.",
+                            archive->getName(), ti.remoteName());
+                    }
+                }
+                return true;
+            }));
+
+        filesToTransfer.push_back(resultsFile);
+    }
+#endif // BUILD_TESTS
 
     auto maybeWaitForMerges = [](Application& app) {
         if (app.getConfig().CATCHUP_WAIT_MERGES_TX_APPLY_FOR_TESTING)
         {
-            auto& bl = app.getBucketManager().getBucketList();
+            auto& bl = app.getBucketManager().getLiveBucketList();
             bl.resolveAnyReadyFutures();
             return bl.futuresAllResolved();
         }
@@ -115,8 +162,8 @@ DownloadApplyTxsWork::yieldMoreWork()
             bool res = true;
             if (waitForPublish)
             {
-                auto& hm = app.getHistoryManager();
-                auto length = hm.publishQueueLength();
+                auto length =
+                    HistoryManager::publishQueueLength(app.getConfig());
                 if (length <= CatchupWork::PUBLISH_QUEUE_UNBLOCK_APPLICATION)
                 {
                     pqFellBehind = false;
@@ -138,29 +185,36 @@ DownloadApplyTxsWork::yieldMoreWork()
             mApp, "wait-merges" + apply->getName(), maybeWaitForMerges, apply));
     }
 
-    seq.push_back(std::make_shared<WorkWithCallback>(
-        mApp, "delete-transactions-" + std::to_string(mCheckpointToQueue),
-        [ft](Application& app) {
-            try
-            {
-                std::filesystem::remove(
-                    std::filesystem::path(ft.localPath_nogz()));
-                CLOG_DEBUG(History, "Deleted transactions {}",
+    for (auto const& ft : filesToTransfer)
+    {
+        auto deleteWorkName = "delete-" + ft.getTypeString() + "-" +
+                              std::to_string(mCheckpointToQueue);
+        seq.push_back(std::make_shared<WorkWithCallback>(
+            mApp, deleteWorkName, [ft](Application& app) {
+                CLOG_DEBUG(History, "Deleting {} {}", ft.getTypeString(),
                            ft.localPath_nogz());
+                try
+                {
+                    std::filesystem::remove(
+                        std::filesystem::path(ft.localPath_nogz()));
+                    CLOG_DEBUG(History, "Deleted {} {}", ft.getTypeString(),
+                               ft.localPath_nogz());
+                }
+                catch (std::filesystem::filesystem_error const& e)
+                {
+                    CLOG_ERROR(History, "Could not delete {} {}: {}",
+                               ft.getTypeString(), ft.localPath_nogz(),
+                               e.what());
+                    return false;
+                }
                 return true;
-            }
-            catch (std::filesystem::filesystem_error const& e)
-            {
-                CLOG_ERROR(History, "Could not delete transactions {}: {}",
-                           ft.localPath_nogz(), e.what());
-                return false;
-            }
-        }));
-
+            }));
+    }
     auto nextWork = std::make_shared<WorkSequence>(
         mApp, "download-apply-" + std::to_string(mCheckpointToQueue), seq,
-        BasicWork::RETRY_NEVER);
-    mCheckpointToQueue += mApp.getHistoryManager().getCheckpointFrequency();
+        BasicWork::RETRY_NEVER, true /*stop at first failure*/);
+    mCheckpointToQueue +=
+        HistoryManager::getCheckpointFrequency(mApp.getConfig());
     mLastYieldedWork = nextWork;
     return nextWork;
 }
@@ -168,8 +222,8 @@ DownloadApplyTxsWork::yieldMoreWork()
 void
 DownloadApplyTxsWork::resetIter()
 {
-    mCheckpointToQueue =
-        mApp.getHistoryManager().checkpointContainingLedger(mRange.mFirst);
+    mCheckpointToQueue = HistoryManager::checkpointContainingLedger(
+        mRange.mFirst, mApp.getConfig());
     mLastYieldedWork.reset();
     mLastApplied = mApp.getLedgerManager().getLastClosedLedgerHeader();
 }
@@ -181,8 +235,8 @@ DownloadApplyTxsWork::hasNext() const
     {
         return false;
     }
-    auto last =
-        mApp.getHistoryManager().checkpointContainingLedger(mRange.last());
+    auto last = HistoryManager::checkpointContainingLedger(mRange.last(),
+                                                           mApp.getConfig());
     return mCheckpointToQueue <= last;
 }
 
@@ -195,17 +249,22 @@ DownloadApplyTxsWork::onSuccess()
 std::string
 DownloadApplyTxsWork::getStatus() const
 {
-    auto& hm = mApp.getHistoryManager();
-    auto first = hm.checkpointContainingLedger(mRange.mFirst);
+    auto first = HistoryManager::checkpointContainingLedger(mRange.mFirst,
+                                                            mApp.getConfig());
     auto last =
         (mRange.mCount == 0 ? first
-                            : hm.checkpointContainingLedger(mRange.last()));
+                            : HistoryManager::checkpointContainingLedger(
+                                  mRange.last(), mApp.getConfig()));
 
     auto checkpointsStarted =
-        (mCheckpointToQueue - first) / hm.getCheckpointFrequency();
+        (mCheckpointToQueue - first) /
+        HistoryManager::getCheckpointFrequency(mApp.getConfig());
     auto checkpointsApplied = checkpointsStarted - getNumWorksInBatch();
 
-    auto totalCheckpoints = (last - first) / hm.getCheckpointFrequency() + 1;
+    auto totalCheckpoints =
+        (last - first) /
+            HistoryManager::getCheckpointFrequency(mApp.getConfig()) +
+        1;
     return fmt::format(
         FMT_STRING("Download & apply checkpoints: num checkpoints left to "
                    "apply:{:d} ({:d}% done)"),

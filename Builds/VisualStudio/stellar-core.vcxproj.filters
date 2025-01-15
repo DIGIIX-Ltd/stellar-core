@@ -178,6 +178,9 @@
     <Filter Include="generated">
       <UniqueIdentifier>{f421dda1-de1d-43af-b5b8-138a24c87cd2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="lib\httpthreaded">
+      <UniqueIdentifier>{feb33c2b-4955-4db8-b62d-72cbc3129a44}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\lib\util\getopt_long.c">
@@ -402,9 +405,6 @@
     <ClCompile Include="..\..\src\main\dumpxdr.cpp">
       <Filter>main</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\main\ExternalQueue.cpp">
-      <Filter>main</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\main\main.cpp">
       <Filter>main</Filter>
     </ClCompile>
@@ -537,7 +537,7 @@
     <ClCompile Include="..\..\src\util\ProtocolVersion.cpp">
       <Filter>util</Filter>
     </ClCompile>
-    <ClCompile Include="src\$(Configuration)\generated\rust\RustBridge.cpp">
+    <ClCompile Include="src\generated\rust\RustBridge.cpp">
       <Filter>rust\generated</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\util\xdrquery\XDRQuery.cpp">
@@ -573,9 +573,6 @@
     <ClCompile Include="..\..\src\bucket\test\BucketTestUtils.cpp">
       <Filter>bucket\tests</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\bucket\Bucket.cpp">
-      <Filter>bucket</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\bucket\BucketApplicator.cpp">
       <Filter>bucket</Filter>
     </ClCompile>
@@ -583,12 +580,6 @@
       <Filter>bucket</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\bucket\BucketInputIterator.cpp">
-      <Filter>bucket</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\bucket\BucketList.cpp">
-      <Filter>bucket</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\bucket\BucketManagerImpl.cpp">
       <Filter>bucket</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\bucket\BucketMergeMap.cpp">
@@ -601,9 +592,6 @@
       <Filter>bucket</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\bucket\MergeKey.cpp">
-      <Filter>bucket</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\bucket\PublishQueueBuckets.cpp">
       <Filter>bucket</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\catchup\test\CatchupWorkTests.cpp">
@@ -625,9 +613,6 @@
       <Filter>catchup</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\catchup\CatchupConfiguration.cpp">
-      <Filter>catchup</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\catchup\CatchupManagerImpl.cpp">
       <Filter>catchup</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\catchup\CatchupRange.cpp">
@@ -906,12 +891,6 @@
     <ClCompile Include="..\..\src\ledger\FlushAndRotateMetaDebugWork.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\ledger\InMemoryLedgerTxn.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\ledger\InMemoryLedgerTxnRoot.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\ledger\InternalLedgerEntry.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
@@ -930,40 +909,19 @@
     <ClCompile Include="..\..\src\ledger\LedgerTxn.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnAccountSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnClaimableBalanceSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnConfigSettingSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnContractCodeSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnContractDataSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnDataSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\ledger\LedgerTxnEntry.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\ledger\LedgerTxnHeader.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnLiquidityPoolSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\ledger\LedgerTxnOfferSQL.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnTrustLineSQL.cpp">
+    <ClCompile Include="..\..\src\ledger\NetworkConfig.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\ledger\NetworkConfig.cpp">
+    <ClCompile Include="..\..\src\ledger\SorobanMetrics.cpp">
       <Filter>ledger</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\ledger\TrustLineWrapper.cpp">
@@ -976,9 +934,6 @@
       <Filter>main\tests</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\test\ConfigTests.cpp">
-      <Filter>main\tests</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\main\test\ExternalQueueTests.cpp">
       <Filter>main\tests</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\test\SelfCheckTests.cpp">
@@ -1018,9 +973,6 @@
       <Filter>overlay\tests</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\overlay\test\TrackerTests.cpp">
-      <Filter>overlay\tests</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\overlay\test\TxAdvertQueueTests.cpp">
       <Filter>overlay\tests</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\overlay\BanManagerImpl.cpp">
@@ -1065,6 +1017,9 @@
     <ClCompile Include="..\..\src\overlay\RandomPeerSource.cpp">
       <Filter>overlay</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\overlay\SurveyDataManager.cpp">
+      <Filter>overlay</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\overlay\SurveyManager.cpp">
       <Filter>overlay</Filter>
     </ClCompile>
@@ -1075,9 +1030,6 @@
       <Filter>overlay</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\overlay\Tracker.cpp">
-      <Filter>overlay</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\overlay\TxAdvertQueue.cpp">
       <Filter>overlay</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\transactions\test\AllowTrustTests.cpp">
@@ -1302,12 +1254,6 @@
     <ClCompile Include="..\..\src\transactions\RestoreFootprintOpFrame.cpp">
       <Filter>transactions</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\lib\tracy\public\TracyClient.cpp">
-      <Filter>lib\tracy</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\ledger\LedgerTxnTTLSQL.cpp">
-      <Filter>ledger</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\util\DebugMetaUtils.cpp">
       <Filter>util</Filter>
     </ClCompile>
@@ -1322,6 +1268,102 @@
     </ClCompile>
     <ClCompile Include="..\..\src\main\SettingsUpgradeUtils.cpp">
       <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\BucketSnapshot.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\BucketSnapshotManager.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\overlay\test\TxAdvertsTests.cpp">
+      <Filter>overlay\tests</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\overlay\TxAdverts.cpp">
+      <Filter>overlay</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\overlay\TxDemandsManager.cpp">
+      <Filter>overlay</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\overlay\Hmac.cpp">
+      <Filter>overlay</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\transactions\test\TransactionTestFrame.cpp">
+      <Filter>transactions\tests</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\util\BinaryFuseFilter.cpp">
+      <Filter>util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\util\test\BinaryFuseTests.cpp">
+      <Filter>util\tests</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\transactions\MutableTransactionResult.cpp">
+      <Filter>transactions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\httpthreaded\connection.cpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\httpthreaded\reply.cpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\httpthreaded\request_parser.cpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\httpthreaded\server.cpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\QueryServer.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\ledger\LedgerStateSnapshot.cpp">
+      <Filter>ledger</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\tracy\public\TracyClient.cpp" />
+    <ClCompile Include="..\..\src\simulation\ApplyLoad.cpp" />
+    <ClCompile Include="..\..\src\simulation\TxGenerator.cpp" />
+    <ClCompile Include="..\..\src\main\AppConnector.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\history\CheckpointBuilder.cpp">
+      <Filter>history</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\BucketBase.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\BucketListBase.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\BucketListSnapshotBase.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\HotArchiveBucket.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\HotArchiveBucketList.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\LiveBucket.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\LiveBucketList.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\SearchableBucketList.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\BucketManager.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\bucket\BucketUtils.cpp">
+      <Filter>bucket</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\ledger\test\InMemoryLedgerTxn.cpp">
+      <Filter>ledger\tests</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\ledger\test\InMemoryLedgerTxnRoot.cpp">
+      <Filter>ledger\tests</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\catchup\LedgerApplyManagerImpl.cpp">
+      <Filter>catchup</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -1565,9 +1607,6 @@
     <ClInclude Include="..\..\src\main\ErrorMessages.h">
       <Filter>main</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\main\ExternalQueue.h">
-      <Filter>main</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\main\Maintainer.h">
       <Filter>main</Filter>
     </ClInclude>
@@ -1679,7 +1718,7 @@
     <ClInclude Include="..\..\src\util\ProtocolVersion.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="src\$(Configuration)\generated\rust\RustBridge.h">
+    <ClInclude Include="src\generated\rust\RustBridge.h">
       <Filter>rust\generated</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\rust\CppShims.h">
@@ -1730,17 +1769,11 @@
     <ClInclude Include="..\..\src\util\xdrquery\XDRQueryParser.h">
       <Filter>util\xdrquery</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\lib\bloom_filter.hpp">
-      <Filter>lib</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\lib\clara.hpp">
       <Filter>lib</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\bucket\test\BucketTestUtils.h">
       <Filter>bucket\tests</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\bucket\Bucket.h">
-      <Filter>bucket</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\bucket\BucketApplicator.h">
       <Filter>bucket</Filter>
@@ -1754,13 +1787,7 @@
     <ClInclude Include="..\..\src\bucket\BucketInputIterator.h">
       <Filter>bucket</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\bucket\BucketList.h">
-      <Filter>bucket</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\bucket\BucketManager.h">
-      <Filter>bucket</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\bucket\BucketManagerImpl.h">
       <Filter>bucket</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\bucket\BucketMergeMap.h">
@@ -1776,9 +1803,6 @@
       <Filter>bucket</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\bucket\MergeKey.h">
-      <Filter>bucket</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\bucket\PublishQueueBuckets.h">
       <Filter>bucket</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\catchup\test\CatchupWorkTests.h">
@@ -1803,9 +1827,6 @@
       <Filter>catchup</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\catchup\CatchupManager.h">
-      <Filter>catchup</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\catchup\CatchupManagerImpl.h">
       <Filter>catchup</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\catchup\CatchupRange.h">
@@ -2030,12 +2051,6 @@
     <ClInclude Include="..\..\src\ledger\FlushAndRotateMetaDebugWork.h">
       <Filter>ledger</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\ledger\InMemoryLedgerTxn.h">
-      <Filter>ledger</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\ledger\InMemoryLedgerTxnRoot.h">
-      <Filter>ledger</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\ledger\InternalLedgerEntry.h">
       <Filter>ledger</Filter>
     </ClInclude>
@@ -2073,6 +2088,9 @@
       <Filter>ledger</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\ledger\NonSociRelatedException.h">
+      <Filter>ledger</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\ledger\SorobanMetrics.h">
       <Filter>ledger</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\ledger\TrustLineWrapper.h">
@@ -2135,6 +2153,9 @@
     <ClInclude Include="..\..\src\overlay\StellarXDR.h">
       <Filter>overlay</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\overlay\SurveyDataManager.h">
+      <Filter>overlay</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\overlay\SurveyManager.h">
       <Filter>overlay</Filter>
     </ClInclude>
@@ -2145,9 +2166,6 @@
       <Filter>overlay</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\overlay\Tracker.h">
-      <Filter>overlay</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\overlay\TxAdvertQueue.h">
       <Filter>overlay</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\transactions\test\SponsorshipTestUtils.h">
@@ -2296,6 +2314,101 @@
     </ClInclude>
     <ClInclude Include="..\..\src\main\SettingsUpgradeUtils.h">
       <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\BucketSnapshot.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\BucketSnapshotManager.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\overlay\TxAdverts.h">
+      <Filter>overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\overlay\TxDemandsManager.h">
+      <Filter>overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\overlay\Hmac.h">
+      <Filter>overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\transactions\test\TransactionTestFrame.h">
+      <Filter>transactions\tests</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\util\BinaryFuseFilter.h">
+      <Filter>util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\transactions\MutableTransactionResult.h">
+      <Filter>transactions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\lib\httpthreaded\connection.hpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\lib\httpthreaded\header.hpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\lib\httpthreaded\reply.hpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\lib\httpthreaded\request.hpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\lib\httpthreaded\request_parser.hpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\lib\httpthreaded\server.hpp">
+      <Filter>lib\httpthreaded</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\main\QueryServer.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\ledger\LedgerStateSnapshot.h">
+      <Filter>ledger</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\simulation\ApplyLoad.h" />
+    <ClInclude Include="..\..\src\simulation\TxGenerator.h" />
+    <ClInclude Include="..\..\src\main\AppConnector.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\history\CheckpointBuilder.h">
+      <Filter>history</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\BucketBase.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\BucketListBase.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\BucketListSnapshotBase.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\HotArchiveBucket.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\HotArchiveBucketList.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\LiveBucket.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\LiveBucketList.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\SearchableBucketList.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\bucket\BucketUtils.h">
+      <Filter>bucket</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\ledger\test\InMemoryLedgerTxn.h">
+      <Filter>ledger\tests</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\ledger\test\InMemoryLedgerTxnRoot.h">
+      <Filter>ledger\tests</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\catchup\LedgerApplyManager.h">
+      <Filter>catchup</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\catchup\LedgerApplyManagerImpl.h">
+      <Filter>catchup</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

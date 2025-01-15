@@ -60,11 +60,15 @@ class PendingEnvelopes
     ItemFetcher mTxSetFetcher;
     ItemFetcher mQuorumSetFetcher;
 
-    using TxSetFramCacheItem = std::pair<uint64, TxSetFrameConstPtr>;
+    using TxSetFramCacheItem = std::pair<uint64, TxSetXDRFrameConstPtr>;
     // recent txsets
+    // Note on thread-safety: the cache must be maintained strictly by the main
+    // thread Other threads may reference TxSetXDRFrameConstPtr, which is safe,
+    // because shared_ptr ref counting is thread-safe TxSetXDRFrameConstPtr
+    // itself is immutable, and thus thread-safe
     RandomEvictionCache<Hash, TxSetFramCacheItem> mTxSetCache;
     // weak references to all known txsets
-    UnorderedMap<Hash, std::weak_ptr<TxSetFrame const>> mKnownTxSets;
+    UnorderedMap<Hash, std::weak_ptr<TxSetXDRFrame const>> mKnownTxSets;
 
     // keep track of txset/qset hash -> size pairs for quick access
     RandomEvictionCache<Hash, size_t> mValueSizeCache;
@@ -103,7 +107,8 @@ class PendingEnvelopes
 
     // tries to find a txset in memory, setting touch also touches the LRU,
     // extending the lifetime of the result
-    TxSetFrameConstPtr getKnownTxSet(Hash const& hash, uint64 slot, bool touch);
+    TxSetXDRFrameConstPtr getKnownTxSet(Hash const& hash, uint64 slot,
+                                        bool touch);
 
     void cleanKnownData();
 
@@ -154,15 +159,15 @@ class PendingEnvelopes
      * in PendingEnvelopes.
      */
     void addTxSet(Hash const& hash, uint64 lastSeenSlotIndex,
-                  TxSetFrameConstPtr txset);
+                  TxSetXDRFrameConstPtr txset);
 
     /**
         Adds @p txset to the cache and returns the txset referenced by the cache
         NB: if caller wants to continue using txset after the call, it should
        use the returned value instead
     */
-    TxSetFrameConstPtr putTxSet(Hash const& hash, uint64 slot,
-                                TxSetFrameConstPtr txset);
+    TxSetXDRFrameConstPtr putTxSet(Hash const& hash, uint64 slot,
+                                   TxSetXDRFrameConstPtr txset);
 
     /**
      * Check if @p txset identified by @p hash was requested before from peers.
@@ -171,7 +176,7 @@ class PendingEnvelopes
      *
      * Return true if TxSet useful (was asked for).
      */
-    bool recvTxSet(Hash const& hash, TxSetFrameConstPtr txset);
+    bool recvTxSet(Hash const& hash, TxSetXDRFrameConstPtr txset);
 
     void peerDoesntHave(MessageType type, Hash const& itemID,
                         Peer::pointer peer);
@@ -188,7 +193,7 @@ class PendingEnvelopes
 
     Json::Value getJsonInfo(size_t limit);
 
-    TxSetFrameConstPtr getTxSet(Hash const& hash);
+    TxSetXDRFrameConstPtr getTxSet(Hash const& hash);
     SCPQuorumSetPtr getQSet(Hash const& hash);
 
     // returns true if we think that the node is in the transitive quorum for

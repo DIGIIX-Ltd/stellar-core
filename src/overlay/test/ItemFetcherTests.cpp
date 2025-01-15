@@ -227,7 +227,8 @@ TEST_CASE("ItemFetcher fetches", "[overlay][ItemFetcher]")
 
             auto waitConn = [&]() {
                 // wait for peers to be setup
-                while (!peer1->isAuthenticated() || !peer2->isAuthenticated())
+                while (!peer1->isAuthenticatedForTesting() ||
+                       !peer2->isAuthenticatedForTesting())
                 {
                     clock.crank(false);
                     clock.sleep_for(std::chrono::milliseconds(100));
@@ -405,7 +406,7 @@ TEST_CASE("next peer strategy", "[overlay][ItemFetcher]")
     int askCount = 0;
     ItemFetcher itemFetcher(*app, [&](Peer::pointer, Hash) { askCount++; });
 
-    sim->crankUntil([&]() { return peer1->isAuthenticated(); },
+    sim->crankUntil([&]() { return peer1->isAuthenticatedForTesting(); },
                     std::chrono::seconds{3}, false);
 
     // this causes to fetch from `peer1` as it's the only one
@@ -436,11 +437,11 @@ TEST_CASE("next peer strategy", "[overlay][ItemFetcher]")
         auto conn2 = sim->getLoopbackConnection(vMainNodeID, vNode2NodeID);
         auto peer2 = conn2->getInitiator();
 
-        sim->crankUntil([&]() { return peer2->isAuthenticated(); },
+        sim->crankUntil([&]() { return peer2->isAuthenticatedForTesting(); },
                         std::chrono::seconds{3}, false);
 
         // still connected
-        REQUIRE(peer1->isAuthenticated());
+        REQUIRE(peer1->isAuthenticatedForTesting());
 
         SECTION("try new peer")
         {
@@ -464,8 +465,8 @@ TEST_CASE("next peer strategy", "[overlay][ItemFetcher]")
         {
             StellarMessage msg(SCP_MESSAGE);
             msg.envelope() = hundredEnvelope1;
-            auto index = sha256(xdr::xdr_to_opaque(msg));
-            app->getOverlayManager().recvFloodedMsgID(msg, peer1, index);
+            app->getOverlayManager().recvFloodedMsgID(msg, peer1,
+                                                      xdrBlake2(msg));
             tracker->tryNextPeer();
             REQUIRE(askCount == 2);
             auto trPeer1b = tracker->getLastAskedPeer();

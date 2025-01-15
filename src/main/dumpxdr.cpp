@@ -14,6 +14,7 @@
 #include "util/XDROperators.h"
 #include "util/XDRStream.h"
 #include "util/types.h"
+#include "xdr/Stellar-internal.h"
 #include <cereal/archives/json.hpp>
 #include <cereal/cereal.hpp>
 #include <fmt/format.h>
@@ -64,37 +65,53 @@ dumpstream(XDRInputFileStream& in, bool compact)
 void
 dumpXdrStream(std::string const& filename, bool compact)
 {
-    std::regex rx(".*(ledger|bucket|transactions|results|meta|scp)-.+\\.xdr");
+    std::regex rx(
+        R"(.*\b(debug-tx-set|(?:(ledger|bucket|transactions|results|meta-debug|scp)-.+))\.xdr(?:\.dirty)?$)");
     std::smatch sm;
     if (std::regex_match(filename, sm, rx))
     {
         XDRInputFileStream in;
         in.open(filename);
 
-        if (sm[1] == "ledger")
+        if (sm[1] == "debug-tx-set")
         {
-            dumpstream<LedgerHeaderHistoryEntry>(in, compact);
+            dumpstream<StoredDebugTransactionSet>(in, compact);
         }
-        else if (sm[1] == "bucket")
+        else if (sm.size() == 3)
         {
-            dumpstream<BucketEntry>(in, compact);
-        }
-        else if (sm[1] == "transactions")
-        {
-            dumpstream<TransactionHistoryEntry>(in, compact);
-        }
-        else if (sm[1] == "results")
-        {
-            dumpstream<TransactionHistoryResultEntry>(in, compact);
-        }
-        else if (sm[1] == "meta")
-        {
-            dumpstream<LedgerCloseMeta>(in, compact);
+            auto& m2 = sm[2];
+            if (m2 == "ledger")
+            {
+                dumpstream<LedgerHeaderHistoryEntry>(in, compact);
+            }
+            else if (m2 == "bucket")
+            {
+                dumpstream<BucketEntry>(in, compact);
+            }
+            else if (m2 == "transactions")
+            {
+                dumpstream<TransactionHistoryEntry>(in, compact);
+            }
+            else if (m2 == "results")
+            {
+                dumpstream<TransactionHistoryResultEntry>(in, compact);
+            }
+            else if (m2 == "meta-debug")
+            {
+                dumpstream<LedgerCloseMeta>(in, compact);
+            }
+            else if (m2 == "scp")
+            {
+                dumpstream<SCPHistoryEntry>(in, compact);
+            }
+            else
+            {
+                throw std::runtime_error("unrecognized XDR type");
+            }
         }
         else
         {
-            releaseAssert(sm[1] == "scp");
-            dumpstream<SCPHistoryEntry>(in, compact);
+            throw std::runtime_error("unrecognized XDR type");
         }
     }
     else
@@ -165,7 +182,7 @@ printOneXdr(xdr::opaque_vec<> const& o, std::string const& desc, bool compact)
 {
     T tmp;
     xdr::xdr_from_opaque(o, tmp);
-    std::cout << xdr_to_string(tmp, desc, compact) << std::endl;
+    std::cout << xdrToCerealString(tmp, desc, compact) << std::endl;
 }
 
 void
@@ -174,7 +191,8 @@ printTransactionMeta(xdr::opaque_vec<> const& o, bool compact)
     TransactionMeta tmp;
     xdr::xdr_from_opaque(o, tmp);
     normalizeMeta(tmp);
-    std::cout << xdr_to_string(tmp, "TransactionMeta", compact) << std::endl;
+    std::cout << xdrToCerealString(tmp, "TransactionMeta", compact)
+              << std::endl;
 }
 
 void

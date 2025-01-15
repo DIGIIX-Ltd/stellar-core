@@ -3,7 +3,6 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 #include "bucket/BucketManager.h"
-#include "bucket/BucketManagerImpl.h"
 #include "bucket/test/BucketTestUtils.h"
 #include "catchup/ReplayDebugMetaWork.h"
 #include "crypto/Hex.h"
@@ -40,11 +39,10 @@ using namespace stellar;
 TEST_CASE("LedgerCloseMetaStream file descriptor - LIVE_NODE",
           "[ledgerclosemetastreamlive]")
 {
-    // Live reqires a multinode simulation, as we're not allowed to run a
+    // Live requires a multinode simulation, as we're not allowed to run a
     // validator and record metadata streams at the same time (to avoid the
     // unbounded-latency stream-write step): N nodes participating in consensus,
-    // and two watching and streaming metadata -- the second one using
-    // EXPERIMENTAL_PRECAUTION_DELAY_META.
+    // and one watching and streaming metadata
 
     Hash expectedLastUnsafeHash, expectedLastSafeHash;
     TmpDirManager tdm(std::string("streamtmp-") + binToHex(randomBytes(8)));
@@ -72,12 +70,7 @@ TEST_CASE("LedgerCloseMetaStream file descriptor - LIVE_NODE",
         SIMULATION_CREATE_NODE(Node1); // Validator
         SIMULATION_CREATE_NODE(Node2); // Validator
         SIMULATION_CREATE_NODE(Node3); // Validator
-
-        // Watcher, !EXPERIMENTAL_PRECAUTION_DELAY_META
-        SIMULATION_CREATE_NODE(Node4);
-
-        // Watcher, EXPERIMENTAL_PRECAUTION_DELAY_META
-        SIMULATION_CREATE_NODE(Node5);
+        SIMULATION_CREATE_NODE(Node4); // Watcher
 
         SCPQuorumSet qSet;
         qSet.threshold = 3;
@@ -89,41 +82,27 @@ TEST_CASE("LedgerCloseMetaStream file descriptor - LIVE_NODE",
         Config const& cfg2 = getTestConfig(2);
         Config const& cfg3 = getTestConfig(3);
         Config cfg4 = getTestConfig(4);
-        Config cfg5 = getTestConfig(5);
 
-        // Step 2: open writable files and pass them to configs 4 and 5
-        // (watchers).
+        // Step 2: open writable files and pass them to watcher config
         cfg4.NODE_IS_VALIDATOR = false;
         cfg4.FORCE_SCP = false;
-        cfg5.NODE_IS_VALIDATOR = false;
-        cfg5.FORCE_SCP = false;
 #ifdef _WIN32
         cfg4.METADATA_OUTPUT_STREAM = metaPath;
-        cfg5.METADATA_OUTPUT_STREAM = metaPathSafe;
 #else
         int fd = ::open(metaPath.c_str(), O_CREAT | O_WRONLY, 0644);
         REQUIRE(fd != -1);
         cfg4.METADATA_OUTPUT_STREAM = fmt::format(FMT_STRING("fd:{}"), fd);
-        int fdSafe = ::open(metaPathSafe.c_str(), O_CREAT | O_WRONLY, 0644);
-        REQUIRE(fdSafe != -1);
-        cfg5.METADATA_OUTPUT_STREAM = fmt::format(FMT_STRING("fd:{}"), fdSafe);
 #endif
-
-        cfg4.EXPERIMENTAL_PRECAUTION_DELAY_META = false;
-        cfg5.EXPERIMENTAL_PRECAUTION_DELAY_META = true;
-        cfg5.setInMemoryMode(); // needed by EXPERIMENTAL_PRECAUTION_DELAY_META
 
         // Step 3: Run simulation a few steps to stream metadata.
         auto app1 = simulation->addNode(vNode1SecretKey, qSet, &cfg1);
         auto app2 = simulation->addNode(vNode2SecretKey, qSet, &cfg2);
         auto app3 = simulation->addNode(vNode3SecretKey, qSet, &cfg3);
         auto app4 = simulation->addNode(vNode4SecretKey, qSet, &cfg4);
-        auto app5 = simulation->addNode(vNode5SecretKey, qSet, &cfg5);
 
         simulation->addPendingConnection(vNode1NodeID, vNode2NodeID);
         simulation->addPendingConnection(vNode1NodeID, vNode3NodeID);
         simulation->addPendingConnection(vNode1NodeID, vNode4NodeID);
-        simulation->addPendingConnection(vNode1NodeID, vNode5NodeID);
 
         simulation->startAllNodes();
         bool watchersAreCorrupted = false;
@@ -142,26 +121,21 @@ TEST_CASE("LedgerCloseMetaStream file descriptor - LIVE_NODE",
 
                 auto const lastClosedLedger =
                     app4->getLedgerManager().getLastClosedLedgerNum();
-                REQUIRE(app5->getLedgerManager().getLastClosedLedgerNum() ==
-                        lastClosedLedger);
 
                 if (lastClosedLedger == expectedLastWatcherLedger - 1)
                 {
-                    expectedLastSafeHash = app5->getLedgerManager()
+                    expectedLastSafeHash = app4->getLedgerManager()
                                                .getLastClosedLedgerHeader()
                                                .hash;
 
                     if (induceOneLedgerFork)
                     {
-                        for (auto& app : {app4, app5})
-                        {
-                            txtest::closeLedgerOn(
-                                *app, ledgerToCorrupt,
-                                app->getLedgerManager()
-                                        .getLastClosedLedgerHeader()
-                                        .header.scpValue.closeTime +
-                                    1);
-                        }
+                        txtest::closeLedgerOn(
+                            *app4, ledgerToCorrupt,
+                            app4->getLedgerManager()
+                                    .getLastClosedLedgerHeader()
+                                    .header.scpValue.closeTime +
+                                1);
 
                         expectedLastUnsafeHash =
                             app4->getLedgerManager()
@@ -178,8 +152,6 @@ TEST_CASE("LedgerCloseMetaStream file descriptor - LIVE_NODE",
             std::chrono::seconds{200}, false);
 
         REQUIRE(app4->getLedgerManager().getLastClosedLedgerNum() ==
-                expectedLastWatcherLedger);
-        REQUIRE(app5->getLedgerManager().getLastClosedLedgerNum() ==
                 expectedLastWatcherLedger);
 
         if (!induceOneLedgerFork)
@@ -204,7 +176,6 @@ TEST_CASE("LedgerCloseMetaStream file descriptor - LIVE_NODE",
     };
 
     auto lcms = readLcms(metaPath);
-    auto lcmsSafe = readLcms(metaPathSafe);
     // The "- 1" is because we don't stream meta for the genesis ledger.
     REQUIRE(lcms.size() == expectedLastWatcherLedger - 1);
     if (lcms.back().v() == 0)
@@ -218,183 +189,6 @@ TEST_CASE("LedgerCloseMetaStream file descriptor - LIVE_NODE",
     else
     {
         REQUIRE(false);
-    }
-
-    // The node with EXPERIMENTAL_PRECAUTION_DELAY_META should not have streamed
-    // the meta for the latest ledger (or the latest ledger before the corrupt
-    // one) yet.
-    REQUIRE(lcmsSafe.size() == lcms.size() - 1);
-
-    if (lcmsSafe.back().v() == 0)
-    {
-        REQUIRE(lcmsSafe.back().v0().ledgerHeader.hash == expectedLastSafeHash);
-    }
-    else if (lcmsSafe.back().v() == 1)
-    {
-        REQUIRE(lcmsSafe.back().v1().ledgerHeader.hash == expectedLastSafeHash);
-    }
-    REQUIRE(lcmsSafe ==
-            std::vector<LedgerCloseMeta>(lcms.begin(), lcms.end() - 1));
-}
-
-TEST_CASE("LedgerCloseMetaStream file descriptor - REPLAY_IN_MEMORY",
-          "[ledgerclosemetastreamreplay]")
-{
-    // Step 1: generate some history for replay.
-    using namespace stellar::historytestutils;
-    TmpDirHistoryConfigurator tCfg;
-    {
-        Config genCfg = getTestConfig(0, Config::TESTDB_DEFAULT);
-        genCfg.MANUAL_CLOSE = false;
-        VirtualClock genClock;
-        genCfg = tCfg.configure(genCfg, true);
-        auto genApp = createTestApplication(genClock, genCfg);
-        auto& genHam = genApp->getHistoryArchiveManager();
-        genHam.initializeHistoryArchive(tCfg.getArchiveDirName());
-        for (size_t i = 0; i < 100; ++i)
-        {
-            genClock.crank(false);
-        }
-        auto& genHm = genApp->getHistoryManager();
-        while (genHm.getPublishSuccessCount() < 5)
-        {
-            genClock.crank(true);
-        }
-        while (genClock.cancelAllEvents() ||
-               genApp->getProcessManager().getNumRunningProcesses() > 0)
-        {
-            genClock.crank(false);
-        }
-    }
-
-    // Step 2: open a writable file descriptor.
-    TmpDirManager tdm(std::string("streamtmp-") + binToHex(randomBytes(8)));
-    TmpDir td = tdm.tmpDir("streams");
-    std::string metaPath = td.getName() + "/stream.xdr";
-    auto cfg1 = getTestConfig(1);
-#ifdef _WIN32
-    cfg1.METADATA_OUTPUT_STREAM = metaPath;
-#else
-    int fd = ::open(metaPath.c_str(), O_CREAT | O_WRONLY, 0644);
-    REQUIRE(fd != -1);
-    cfg1.METADATA_OUTPUT_STREAM = fmt::format(FMT_STRING("fd:{}"), fd);
-#endif
-
-    bool const delayMeta = GENERATE(true, false);
-
-    // Step 3: pass it to an application and have it catch up to the generated
-    // history, streaming ledgerCloseMeta to the file descriptor.
-    Hash hash;
-    {
-        auto cfg = tCfg.configure(cfg1, false);
-        cfg.NODE_IS_VALIDATOR = false;
-        cfg.FORCE_SCP = false;
-        cfg.RUN_STANDALONE = true;
-        cfg.setInMemoryMode();
-        cfg.EXPERIMENTAL_PRECAUTION_DELAY_META = delayMeta;
-        VirtualClock clock;
-        auto app = createTestApplication(clock, cfg, /*newdb=*/false);
-
-        CatchupConfiguration cc{CatchupConfiguration::CURRENT,
-                                std::numeric_limits<uint32_t>::max(),
-                                CatchupConfiguration::Mode::OFFLINE_COMPLETE};
-        Json::Value catchupInfo;
-        auto& ham = app->getHistoryArchiveManager();
-        auto& lm = app->getLedgerManager();
-        auto archive = ham.selectRandomReadableHistoryArchive();
-        int res = catchup(app, cc, catchupInfo, archive);
-        REQUIRE(res == 0);
-        hash = lm.getLastClosedLedgerHeader().hash;
-        while (clock.cancelAllEvents() ||
-               app->getProcessManager().getNumRunningProcesses() > 0)
-        {
-            clock.crank(false);
-        }
-    }
-
-    // Step 4: reopen the file as an XDR stream and read back the LCMs
-    // and check they have the expected content.
-    //
-    // The EXPERIMENTAL_PRECAUTION_DELAY_META case should still have streamed
-    // the latest meta, because catchup should have validated that ledger's hash
-    // by validating a chain of hashes back from one obtained from consensus.
-    XDRInputFileStream stream;
-    stream.open(metaPath);
-    LedgerCloseMeta lcm;
-    size_t nLcm = 1;
-    while (stream && stream.readOne(lcm))
-    {
-        ++nLcm;
-    }
-    // 5 checkpoints is ledger 0x13f
-    REQUIRE(nLcm == 0x13f);
-    if (lcm.v() == 0)
-    {
-        REQUIRE(lcm.v0().ledgerHeader.hash == hash);
-    }
-    else if (lcm.v() == 1)
-    {
-        REQUIRE(lcm.v1().ledgerHeader.hash == hash);
-    }
-    else
-    {
-        REQUIRE(false);
-    }
-}
-
-TEST_CASE("EXPERIMENTAL_PRECAUTION_DELAY_META configuration",
-          "[ledgerclosemetastreamlive][ledgerclosemetastreamreplay]")
-{
-    VirtualClock clock;
-    Config cfg = getTestConfig();
-
-    SECTION("EXPERIMENTAL_PRECAUTION_DELAY_META may take either value "
-            "(which is ignored) without METADATA_OUTPUT_STREAM")
-    {
-        cfg.METADATA_OUTPUT_STREAM = "";
-        auto const delayMeta = GENERATE(false, true);
-        auto const inMemory = GENERATE(false, true);
-        cfg.EXPERIMENTAL_PRECAUTION_DELAY_META = delayMeta;
-        if (inMemory)
-        {
-            cfg.setInMemoryMode();
-        }
-        REQUIRE_NOTHROW(createTestApplication(clock, cfg));
-    }
-
-    SECTION("EXPERIMENTAL_PRECAUTION_DELAY_META together with "
-            "METADATA_OUTPUT_STREAM requires --in-memory")
-    {
-        TmpDirManager tdm(std::string("streamtmp-") + binToHex(randomBytes(8)));
-        TmpDir td = tdm.tmpDir("streams");
-        std::string metaPath = td.getName() + "/stream.xdr";
-        std::string metaStream;
-
-#ifdef _WIN32
-        metaStream = metaPath;
-#else
-        int fd = ::open(metaPath.c_str(), O_CREAT | O_WRONLY, 0644);
-        REQUIRE(fd != -1);
-        metaStream = fmt::format(FMT_STRING("fd:{}"), fd);
-#endif
-
-        cfg.METADATA_OUTPUT_STREAM = metaStream;
-        auto const delayMeta = GENERATE(false, true);
-        auto const inMemory = GENERATE(false, true);
-        cfg.EXPERIMENTAL_PRECAUTION_DELAY_META = delayMeta;
-        if (inMemory)
-        {
-            cfg.setInMemoryMode();
-        }
-        if (delayMeta && !inMemory)
-        {
-            REQUIRE_THROWS_AS(createTestApplication(clock, cfg),
-                              std::invalid_argument);
-        }
-        else
-        {
-            REQUIRE_NOTHROW(createTestApplication(clock, cfg));
-        }
     }
 }
 
@@ -510,43 +304,43 @@ TEST_CASE_VERSIONS("meta stream contains reasonable meta", "[ledgerclosemeta]")
             // 5. Create contract instance
 
             // Deploy and extend contract so it won't be archived during test
-            ContractStorageInvocationTest test(cfg);
-            test.extendOp(test.getContractKeys(), 10'000);
+            SorobanTest test(cfg);
+            ContractStorageTestClient client(test);
+            auto& contract = client.getContract();
+
+            test.invokeExtendOp(contract.getKeys(), 10'000);
 
             // Write key that we will restore later
-            test.put("archived", ContractDataDurability::PERSISTENT, 42);
+            REQUIRE(client.put("archived", ContractDataDurability::PERSISTENT,
+                               42) == INVOKE_HOST_FUNCTION_SUCCESS);
             auto archivedKeySymbol = makeSymbolSCVal("archived");
             auto archivedLk =
-                contractDataKey(test.getContractID(), archivedKeySymbol,
+                contractDataKey(contract.getAddress(), archivedKeySymbol,
                                 ContractDataDurability::PERSISTENT);
 
             uint32_t liveUntilLedger =
-                test.getLedgerSeq() +
+                test.getLCLSeq() +
                 test.getNetworkCfg().stateArchivalSettings().minPersistentTTL -
                 1;
 
             // Generate a few accounts so we can send multiple TXs in a single
             // ledger.
-            auto bal = test.getApp()->getLedgerManager().getLastMinBalance(2);
-            auto acc1 = std::make_shared<TestAccount>(
-                test.getRoot().create("acc1", bal));
-            auto acc2 = std::make_shared<TestAccount>(
-                test.getRoot().create("acc2", bal));
-            auto acc3 = std::make_shared<TestAccount>(
-                test.getRoot().create("acc3", bal));
-            auto acc4 = std::make_shared<TestAccount>(
-                test.getRoot().create("acc4", bal));
+            auto bal = test.getApp().getLedgerManager().getLastMinBalance(2);
+            auto acc1 = test.getRoot().create("acc1", bal);
+            auto acc2 = test.getRoot().create("acc2", bal);
+            auto acc3 = test.getRoot().create("acc3", bal);
+            auto acc4 = test.getRoot().create("acc4", bal);
             auto acc5 = test.getRoot().create("acc5", bal);
 
             // Close ledgers until out contract expires. These ledgers won't
             // emit meta
             for (uint32_t i =
-                     test.getApp()->getLedgerManager().getLastClosedLedgerNum();
+                     test.getApp().getLedgerManager().getLastClosedLedgerNum();
                  i <= liveUntilLedger + 1; ++i)
             {
-                closeLedgerOn(*test.getApp(), i, 2, 1, 2016);
+                closeLedgerOn(test.getApp(), i, 2, 1, 2016);
             }
-            REQUIRE(!test.isEntryLive(archivedLk, test.getLedgerSeq()));
+            REQUIRE(!test.isEntryLive(archivedLk, test.getLCLSeq()));
 
             // Restore archived entry
             SorobanResources restoreResources;
@@ -555,47 +349,57 @@ TEST_CASE_VERSIONS("meta stream contains reasonable meta", "[ledgerclosemeta]")
             restoreResources.readBytes = 5'000;
             restoreResources.writeBytes = 1'000;
             auto tx1 = test.createRestoreTx(restoreResources, 1'000,
-                                            DEFAULT_TEST_RESOURCE_FEE, acc1);
+                                            DEFAULT_TEST_RESOURCE_FEE, &acc1);
 
-            // Extend TTL of WASM and instance
+            // Extend TTL of Wasm and instance
             SorobanResources extendResources;
-            extendResources.footprint.readOnly = test.getContractKeys();
+            extendResources.footprint.readOnly = contract.getKeys();
             extendResources.instructions = 0;
             extendResources.readBytes = 10'000;
             extendResources.writeBytes = 0;
             auto tx2 =
                 test.createExtendOpTx(extendResources, /*extendTo*/ 10'000,
-                                      1'000, DEFAULT_TEST_RESOURCE_FEE, acc2);
+                                      1'000, DEFAULT_TEST_RESOURCE_FEE, &acc2);
 
             // Write new entry with key PERSISTENT("key")
             auto liveKeySymbol = makeSymbolSCVal("key");
-            auto funcSymbol = makeSymbol("put_persistent");
+            auto fnName = "put_persistent";
             auto args = {liveKeySymbol, makeU64SCVal(42)};
-            auto liveLk = contractDataKey(test.getContractID(), liveKeySymbol,
+            auto liveLk = contractDataKey(client.getContract().getAddress(),
+                                          liveKeySymbol,
                                           ContractDataDurability::PERSISTENT);
-            SorobanResources putResources;
-            putResources.footprint.readOnly = test.getContractKeys();
-            putResources.footprint.readWrite = {liveLk};
-            putResources.instructions = 4'000'000;
-            putResources.readBytes = 10'000;
-            putResources.writeBytes = 1'000;
-            auto resourceFee =
-                test.computeResourceFee(putResources, funcSymbol, args);
+            auto putSpec = SorobanInvocationSpec()
+                               .setInstructions(4'000'000)
+                               .setReadBytes(10'000)
+                               .setWriteBytes(1'000)
+                               .setInclusionFee(1'000)
+                               .setRefundableResourceFee(40'000)
+                               .setReadWriteFootprint({liveLk});
 
-            auto tx3 = test.createInvokeTx(putResources, funcSymbol, args,
-                                           1'000, resourceFee + 40'000, acc3);
+            auto tx3 = contract.prepareInvocation(fnName, args, putSpec)
+                           .withExactNonRefundableResourceFee()
+                           .createTx(&acc3);
 
             // Same put TX from before, but this one should fail due to invalid
             // footprint
-            SorobanResources badPutResources = putResources;
-            badPutResources.footprint.readWrite.clear();
-            auto tx4 = test.createInvokeTx(badPutResources, funcSymbol, args,
-                                           1'000, resourceFee + 40'000, acc4);
+            auto tx4 = contract
+                           .prepareInvocation(fnName, args,
+                                              putSpec.setReadWriteFootprint({}))
+                           .withExactNonRefundableResourceFee()
+                           .createTx(&acc4);
+            SorobanResources createResources;
+            createResources.instructions = 200'000;
+            createResources.readBytes = 5000;
+            createResources.writeBytes = 5000;
 
-            auto tx5 = test.getCreateTx(acc5);
+            auto tx5 = makeSorobanCreateContractTx(
+                test.getApp(), acc5,
+                makeContractIDPreimage(acc5, sha256("salt")),
+                makeWasmExecutable(contract.getKeys()[0].contractCode().hash),
+                createResources, 1000);
 
-            closeLedger(*test.getApp(), {tx1, tx2, tx3, tx4, tx5});
-            targetSeq = 23;
+            closeLedger(test.getApp(), {tx1, tx2, tx3, tx4, tx5});
+            targetSeq = 28;
         }
         else
         {
@@ -606,12 +410,19 @@ TEST_CASE_VERSIONS("meta stream contains reasonable meta", "[ledgerclosemeta]")
             auto txFee = lm.getLastTxFee();
             auto bal = app->getLedgerManager().getLastMinBalance(2);
 
+            // We're going to examine the meta generated by ledger #6.
+            targetSeq = 6;
+
             if (appProtocolVersionStartsFrom(*app, SOROBAN_PROTOCOL_VERSION))
             {
-                LedgerTxn ltx(app->getLedgerTxnRoot());
-                app->getLedgerManager()
-                    .getMutableSorobanNetworkConfig()
-                    .setBucketListSnapshotPeriodForTesting(1);
+                modifySorobanNetworkConfig(
+                    *app, [&](SorobanNetworkConfig& cfg) {
+                        cfg.mStateArchivalSettings
+                            .bucketListWindowSamplePeriod = 1;
+                    });
+
+                // Modify Soroban network config closes a ledger
+                ++targetSeq;
             }
 
             auto root = TestAccount::createRoot(*app);
@@ -642,12 +453,12 @@ TEST_CASE_VERSIONS("meta stream contains reasonable meta", "[ledgerclosemeta]")
                 // or later), we re-wrap the final tx in a fee-bump from
                 // acc2.
                 auto tx = txs.back();
-                txs.back() = feeBump(*app, acc2, tx, 5000);
+                txs.back() = feeBump(
+                    *app, acc2,
+                    std::static_pointer_cast<TransactionTestFrame const>(tx),
+                    5000);
             }
             closeLedger(*app, txs);
-
-            // We're going to examine the meta generated by ledger #6.
-            targetSeq = 6;
         }
 
         XDRInputFileStream in;
@@ -696,7 +507,7 @@ TEST_CASE_VERSIONS("meta stream contains reasonable meta", "[ledgerclosemeta]")
                         lcm.v(), cfg.TESTING_UPGRADE_LEDGER_PROTOCOL_VERSION);
                 }
                 normalizeMeta(lcm);
-                std::string have = xdr_to_string(lcm, "LedgerCloseMeta");
+                std::string have = xdrToCerealString(lcm, "LedgerCloseMeta");
                 if (getenv("GENERATE_TEST_LEDGER_CLOSE_META"))
                 {
                     std::ofstream outJson(refJsonPath);

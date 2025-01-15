@@ -53,6 +53,25 @@ It then follows that:
 
 # List of releases
 
+## v22.0.0 (2024-11-06)
+
+* `Ledger` - protocol - Fixed an issue with read only TTL extensions not being charged for when initiated within a contract.
+
+## v20.4.0 (2024-04-08)
+
+* `Overlay` - security - remote crash could be triggered due to race condition in error code processing from a third party library.
+    * exploited: no
+    * mitigation: code fix
+
+## v19.14.0 (2023-09-19)
+
+* `Overlay` - security - remote crash via resource exhaustion (DoS)
+    * exploited: yes
+        * some nodes crashed and restarted
+    * mitigation:
+        * immediate: block malicious IPs
+        * actual: code fix
+
 ## v18.0.1 (2021-10-04)
 
 * `Ledger` - protocol - fixed a rounding issue when initializing a liquidity pool. No impact as this was discovered before the main network upgrade to protocol 18.

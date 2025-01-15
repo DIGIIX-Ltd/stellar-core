@@ -3,16 +3,13 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 #include "overlay/PeerManager.h"
-#include "crypto/Random.h"
 #include "database/Database.h"
 #include "lib/util/stdrandom.h"
 #include "main/Application.h"
 #include "overlay/RandomPeerSource.h"
-#include "overlay/StellarXDR.h"
 #include "util/GlobalChecks.h"
 #include "util/Logging.h"
 #include "util/Math.h"
-#include "util/must_use.h"
 
 #include <Tracy.hpp>
 #include <algorithm>
@@ -172,6 +169,7 @@ PeerManager::removePeersWithManyFailures(size_t minNumFailures,
                                          PeerBareAddress const* address)
 {
     ZoneScoped;
+    releaseAssert(threadIsMain());
     try
     {
         auto& db = mApp.getDatabase();
@@ -182,7 +180,8 @@ PeerManager::removePeersWithManyFailures(size_t minNumFailures,
             sql += " AND ip = :ip";
         }
 
-        auto prep = db.getPreparedStatement(sql);
+        auto prep =
+            db.getPreparedStatement(sql, mApp.getDatabase().getSession());
         auto& st = prep.statement();
 
         st.exchange(use(minNumFailures));
@@ -239,7 +238,8 @@ PeerManager::load(PeerBareAddress const& address)
     {
         auto prep = mApp.getDatabase().getPreparedStatement(
             "SELECT numfailures, nextattempt, type FROM peers "
-            "WHERE ip = :v1 AND port = :v2");
+            "WHERE ip = :v1 AND port = :v2",
+            mApp.getDatabase().getSession());
         auto& st = prep.statement();
         st.exchange(into(result.mNumFailures));
         st.exchange(into(result.mNextAttempt));
@@ -296,7 +296,8 @@ PeerManager::store(PeerBareAddress const& address, PeerRecord const& peerRecord,
 
     try
     {
-        auto prep = mApp.getDatabase().getPreparedStatement(query);
+        auto prep = mApp.getDatabase().getPreparedStatement(
+            query, mApp.getDatabase().getSession());
         auto& st = prep.statement();
         st.exchange(use(peerRecord.mNextAttempt));
         st.exchange(use(peerRecord.mNumFailures));
@@ -505,7 +506,8 @@ PeerManager::countPeers(std::string const& where,
     {
         std::string sql = "SELECT COUNT(*) FROM peers WHERE " + where;
 
-        auto prep = mApp.getDatabase().getPreparedStatement(sql);
+        auto prep = mApp.getDatabase().getPreparedStatement(
+            sql, mApp.getDatabase().getSession());
         auto& st = prep.statement();
 
         bind(st);
@@ -535,7 +537,8 @@ PeerManager::loadPeers(size_t limit, size_t offset, std::string const& where,
                           "FROM peers WHERE " +
                           where + " LIMIT :limit OFFSET :offset";
 
-        auto prep = mApp.getDatabase().getPreparedStatement(sql);
+        auto prep = mApp.getDatabase().getPreparedStatement(
+            sql, mApp.getDatabase().getSession());
         auto& st = prep.statement();
 
         bind(st);
@@ -572,8 +575,8 @@ PeerManager::loadPeers(size_t limit, size_t offset, std::string const& where,
 void
 PeerManager::dropAll(Database& db)
 {
-    db.getSession() << "DROP TABLE IF EXISTS peers;";
-    db.getSession() << kSQLCreateStatement;
+    db.getRawSession() << "DROP TABLE IF EXISTS peers;";
+    db.getRawSession() << kSQLCreateStatement;
 }
 
 std::vector<std::pair<PeerBareAddress, PeerRecord>>
@@ -590,7 +593,8 @@ PeerManager::loadAllPeers()
         int port;
         PeerRecord record;
 
-        auto prep = mApp.getDatabase().getPreparedStatement(sql);
+        auto prep = mApp.getDatabase().getPreparedStatement(
+            sql, mApp.getDatabase().getSession());
         auto& st = prep.statement();
 
         st.exchange(into(ip));
@@ -623,7 +627,7 @@ void
 PeerManager::storePeers(
     std::vector<std::pair<PeerBareAddress, PeerRecord>> peers)
 {
-    soci::transaction tx(mApp.getDatabase().getSession());
+    soci::transaction tx(mApp.getDatabase().getRawSession());
     for (auto const& peer : peers)
     {
         store(peer.first, peer.second, /* inDatabase */ false);

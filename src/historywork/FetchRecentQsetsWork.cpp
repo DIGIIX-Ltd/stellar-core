@@ -51,7 +51,7 @@ FetchRecentQsetsWork::doWork()
     // about every active qset. A more sophisticated view would survey longer
     // time periods at lower resolution.
     uint32_t numCheckpoints = 100;
-    uint32_t step = mApp.getHistoryManager().getCheckpointFrequency();
+    uint32_t step = HistoryManager::getCheckpointFrequency(mApp.getConfig());
     uint32_t window = numCheckpoints * step;
     uint32_t lastSeq = mLedgerNum;
     uint32_t firstSeq = lastSeq < window ? (step - 1) : (lastSeq - window);
@@ -62,7 +62,7 @@ FetchRecentQsetsWork::doWork()
                   firstSeq, lastSeq);
         auto range = CheckpointRange::inclusive(firstSeq, lastSeq, step);
         mDownloadSCPMessagesWork = addWork<BatchDownloadWork>(
-            range, HISTORY_FILE_TYPE_SCP, *mDownloadDir);
+            range, FileType::HISTORY_FILE_TYPE_SCP, *mDownloadDir);
         return State::WORK_RUNNING;
     }
     else if (mDownloadSCPMessagesWork->getState() != State::WORK_SUCCESS)
@@ -75,7 +75,7 @@ FetchRecentQsetsWork::doWork()
     {
         CLOG_INFO(History, "Scanning for QSets in checkpoint: {}", i);
         XDRInputFileStream in;
-        FileTransferInfo fi(*mDownloadDir, HISTORY_FILE_TYPE_SCP, i);
+        FileTransferInfo fi(*mDownloadDir, FileType::HISTORY_FILE_TYPE_SCP, i);
         try
         {
             in.open(fi.localPath_nogz());

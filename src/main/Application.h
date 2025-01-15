@@ -27,7 +27,7 @@ class VirtualClock;
 class TmpDirManager;
 class LedgerManager;
 class BucketManager;
-class CatchupManager;
+class LedgerApplyManager;
 class HistoryArchiveManager;
 class HistoryManager;
 class Maintainer;
@@ -46,6 +46,7 @@ class AbstractLedgerTxnParent;
 class BasicWork;
 enum class LoadGenMode;
 struct GeneratedLoadConfig;
+class AppConnector;
 
 #ifdef BUILD_TESTS
 class LoadGenerator;
@@ -206,7 +207,7 @@ class Application
     virtual TmpDirManager& getTmpDirManager() = 0;
     virtual LedgerManager& getLedgerManager() = 0;
     virtual BucketManager& getBucketManager() = 0;
-    virtual CatchupManager& getCatchupManager() = 0;
+    virtual LedgerApplyManager& getLedgerApplyManager() = 0;
     virtual HistoryArchiveManager& getHistoryArchiveManager() = 0;
     virtual HistoryManager& getHistoryManager() = 0;
     virtual Maintainer& getMaintainer() = 0;
@@ -226,12 +227,24 @@ class Application
     // this io_context will execute in parallel with the calling thread, so use
     // with caution.
     virtual asio::io_context& getWorkerIOContext() = 0;
+    virtual asio::io_context& getEvictionIOContext() = 0;
+    virtual asio::io_context& getOverlayIOContext() = 0;
+    virtual asio::io_context& getLedgerCloseIOContext() = 0;
 
     virtual void postOnMainThread(
         std::function<void()>&& f, std::string&& name,
         Scheduler::ActionType type = Scheduler::ActionType::NORMAL_ACTION) = 0;
+
+    // While both are lower priority than the main thread, eviction threads have
+    // more priority than regular worker background threads
     virtual void postOnBackgroundThread(std::function<void()>&& f,
                                         std::string jobName) = 0;
+    virtual void postOnEvictionBackgroundThread(std::function<void()>&& f,
+                                                std::string jobName) = 0;
+    virtual void postOnOverlayThread(std::function<void()>&& f,
+                                     std::string jobName) = 0;
+    virtual void postOnLedgerCloseThread(std::function<void()>&& f,
+                                         std::string jobName) = 0;
 
     // Perform actions necessary to transition from BOOTING_STATE to other
     // states. In particular: either reload or reinitialize the database, and
@@ -265,6 +278,11 @@ class Application
 
     // Access the load generator for manual operation.
     virtual LoadGenerator& getLoadGenerator() = 0;
+
+    // Returns the mutable config of the app. This is only useful for testing
+    // the config flags that are used in dynamic fashion (i.e. not for the app
+    // initialization), use with caution.
+    virtual Config& getMutableConfig() = 0;
 #endif
 
     // Execute any administrative commands written in the Config.COMMANDS
@@ -312,10 +330,7 @@ class Application
         return ret;
     }
 
-    // This method is used in in-memory mode: when rebuilding state from buckets
-    // is not possible, this method resets the database state back to genesis
-    // (while preserving the overlay data).
-    virtual void resetDBForInMemoryMode() = 0;
+    virtual AppConnector& getAppConnector() = 0;
 
   protected:
     Application()

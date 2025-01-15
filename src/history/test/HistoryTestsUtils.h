@@ -4,7 +4,8 @@
 // under the Apache License, Version 2.0. See the COPYING file at the root
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
-#include "bucket/BucketList.h"
+#include "bucket/HotArchiveBucketList.h"
+#include "bucket/LiveBucketList.h"
 #include "catchup/VerifyLedgerChainWork.h"
 #include "crypto/Hex.h"
 #include "herder/HerderImpl.h"
@@ -22,7 +23,7 @@
 #include "util/TmpDir.h"
 
 #include "bucket/BucketOutputIterator.h"
-#include "catchup/CatchupManager.h"
+#include "catchup/LedgerApplyManager.h"
 #include "ledger/CheckpointRange.h"
 #include "lib/catch.hpp"
 #include <random>
@@ -98,7 +99,7 @@ class RealGenesisTmpDirHistoryConfigurator : public TmpDirHistoryConfigurator
     Config& configure(Config& cfg, bool writable) const override;
 };
 
-class BucketOutputIteratorForTesting : public BucketOutputIterator
+class BucketOutputIteratorForTesting : public LiveBucketOutputIterator
 {
     const size_t NUM_ITEMS_PER_BUCKET = 5;
 
@@ -160,7 +161,7 @@ struct CatchupPerformedWork
     uint64_t mTxSetsDownloaded;
     uint64_t mTxSetsApplied;
 
-    CatchupPerformedWork(CatchupManager::CatchupMetrics const& metrics);
+    CatchupPerformedWork(LedgerApplyManager::CatchupMetrics const& metrics);
 
     CatchupPerformedWork(uint64_t historyArchiveStatesDownloaded,
                          uint64_t checkpointsDownloaded,
@@ -178,15 +179,13 @@ struct CatchupPerformedWork
 class CatchupSimulation
 {
   protected:
-    VirtualClock mClock;
+    std::unique_ptr<VirtualClock> mClock;
     std::list<VirtualClock> mSpawnedAppsClocks;
     std::shared_ptr<HistoryConfigurator> mHistoryConfigurator;
     Config mCfg;
     std::vector<Config> mCfgs;
     Application::pointer mAppPtr;
-    Application& mApp;
-    BucketList mBucketListAtLastPublish;
-
+    LiveBucketList mBucketListAtLastPublish;
     std::vector<LedgerCloseData> mLedgerCloseDatas;
 
     std::vector<uint32_t> mLedgerSeqs;
@@ -217,19 +216,20 @@ class CatchupSimulation
         VirtualClock::Mode mode = VirtualClock::VIRTUAL_TIME,
         std::shared_ptr<HistoryConfigurator> cg =
             std::make_shared<TmpDirHistoryConfigurator>(),
-        bool startApp = true);
+        bool startApp = true,
+        Config::TestDbMode dbMode = Config::TESTDB_IN_MEMORY);
     ~CatchupSimulation();
 
     Application&
     getApp() const
     {
-        return mApp;
+        return *mAppPtr;
     }
 
     VirtualClock&
     getClock()
     {
-        return mClock;
+        return *mClock;
     }
 
     HistoryConfigurator&
@@ -249,8 +249,12 @@ class CatchupSimulation
     void generateRandomLedger(uint32_t version = 0);
 
     void ensurePublishesComplete();
-    void ensureLedgerAvailable(uint32_t targetLedger);
-    void ensureOfflineCatchupPossible(uint32_t targetLedger);
+    void
+    ensureLedgerAvailable(uint32_t targetLedger,
+                          std::optional<uint32_t> restartLedger = std::nullopt);
+    void ensureOfflineCatchupPossible(
+        uint32_t targetLedger,
+        std::optional<uint32_t> restartLedger = std::nullopt);
     void ensureOnlineCatchupPossible(uint32_t targetLedger,
                                      uint32_t bufferLedgers = 0);
 
@@ -259,7 +263,7 @@ class CatchupSimulation
 
     Application::pointer createCatchupApplication(
         uint32_t count, Config::TestDbMode dbMode, std::string const& appName,
-        bool publish = false, bool useBucketListDB = false,
+        bool publish = false,
         std::optional<uint32_t> ledgerVersion = std::nullopt);
     bool catchupOffline(Application::pointer app, uint32_t toLedger,
                         bool extraValidation = false);
@@ -271,11 +275,8 @@ class CatchupSimulation
     // this method externalizes through herder
     void externalizeLedger(HerderImpl& herder, uint32_t ledger);
 
-    void crankUntil(Application::pointer app,
-                    std::function<bool()> const& predicate,
-                    VirtualClock::duration duration);
-
     void setUpgradeLedger(uint32_t ledger, ProtocolVersion upgradeVersion);
+    void restartApp();
 };
 }
 }

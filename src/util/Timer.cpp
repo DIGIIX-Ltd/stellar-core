@@ -38,6 +38,7 @@ VirtualClock::now() const noexcept
     }
     else
     {
+        std::lock_guard<std::mutex> lock(mVirtualNowMutex);
         return mVirtualNow;
     }
 }
@@ -51,6 +52,7 @@ VirtualClock::system_now() const noexcept
     }
     else
     {
+        std::lock_guard<std::mutex> lock(mVirtualNowMutex);
         auto offset = mVirtualNow.time_since_epoch();
         return std::chrono::system_clock::time_point(
             std::chrono::duration_cast<
@@ -91,7 +93,7 @@ VirtualClockEventCompare::operator()(shared_ptr<VirtualClockEvent> a,
 VirtualClock::time_point
 VirtualClock::next() const
 {
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
     VirtualClock::time_point least = time_point::max();
     if (!mEvents.empty())
     {
@@ -196,7 +198,7 @@ VirtualClock::enqueue(shared_ptr<VirtualClockEvent> ve)
     {
         return;
     }
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
     mEvents.emplace(ve);
     maybeSetRealtimer();
 }
@@ -219,7 +221,7 @@ VirtualClock::flushCancelledEvents()
         mFlushesIgnored++;
         return;
     }
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
 
     auto toKeep = vector<shared_ptr<VirtualClockEvent>>();
     toKeep.reserve(mEvents.size());
@@ -242,7 +244,7 @@ bool
 VirtualClock::cancelAllEvents()
 {
     ZoneScoped;
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
 
     bool wasEmpty = mEvents.empty();
     while (!mEvents.empty())
@@ -283,6 +285,7 @@ void
 VirtualClock::setCurrentVirtualTime(time_point t)
 {
     releaseAssert(mMode == VIRTUAL_TIME);
+    std::lock_guard<std::mutex> lock(mVirtualNowMutex);
     // Maintain monotonicity in VIRTUAL_TIME mode.
     releaseAssert(t >= mVirtualNow);
     mVirtualNow = t;
@@ -509,7 +512,7 @@ VirtualClock::advanceToNow()
     {
         return 0;
     }
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
 
     auto n = now();
     vector<shared_ptr<VirtualClockEvent>> toDispatch;
@@ -539,7 +542,7 @@ VirtualClock::advanceToNext()
         return 0;
     }
     releaseAssert(mMode == VIRTUAL_TIME);
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
     if (mEvents.empty())
     {
         return 0;
@@ -547,9 +550,12 @@ VirtualClock::advanceToNext()
 
     auto nextEvent = next();
     // jump forward in time, if needed
-    if (mVirtualNow < nextEvent)
     {
-        mVirtualNow = nextEvent;
+        std::lock_guard<std::mutex> lock(mVirtualNowMutex);
+        if (mVirtualNow < nextEvent)
+        {
+            mVirtualNow = nextEvent;
+        }
     }
     return advanceToNow();
 }

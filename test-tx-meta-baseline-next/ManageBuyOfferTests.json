@@ -1,6 +1,6 @@
 
 {
-	"!cfg protocol version" : 21,
+	"!cfg protocol version" : 23,
 	"!rng seed" : 12345,
 	"!test all versions" : true,
 	"!versions to test" : 
@@ -26,7 +26,9 @@
 		18,
 		19,
 		20,
-		21
+		21,
+		22,
+		23
 	],
 	"manage buy offer exactly crosses existing offers|protocol version 0" : 
 	[
@@ -194,34 +196,10 @@
 		"gXmFDHjVy2Q=",
 		"vUEu2GE4UYc=",
 		"RLfXSaItxO4=",
-		"cf7g8T0DhvY=",
-		"Vazya62AJ3s=",
-		"HXWRSmG+rKE=",
-		"T2T23nzwrC4=",
-		"OxFzoCxBIOo=",
-		"GIBSYiKtZSM=",
-		"gXmFDHjVy2Q=",
-		"vUEu2GE4UYc=",
-		"RLfXSaItxO4=",
-		"cf7g8T0DhvY=",
-		"Vazya62AJ3s=",
-		"HXWRSmG+rKE=",
-		"T2T23nzwrC4=",
-		"OxFzoCxBIOo=",
-		"GIBSYiKtZSM=",
-		"gXmFDHjVy2Q=",
-		"vUEu2GE4UYc=",
-		"RLfXSaItxO4=",
-		"cf7g8T0DhvY=",
-		"Vazya62AJ3s=",
-		"HXWRSmG+rKE=",
-		"T2T23nzwrC4=",
-		"OxFzoCxBIOo=",
-		"GIBSYiKtZSM=",
-		"gXmFDHjVy2Q=",
-		"vUEu2GE4UYc=",
-		"RLfXSaItxO4=",
-		"cf7g8T0DhvY=",
+		"cf7g8T0DhvY="
+	],
+	"manage buy offer exactly crosses existing offers|protocol version 21" : 
+	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
 		"T2T23nzwrC4=",
@@ -232,12 +210,7 @@
 		"RLfXSaItxO4=",
 		"cf7g8T0DhvY="
 	],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy five for two" : [ "f2Jax9dKFZA=", "IMjgcSt8R8k=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy one for one" : [ "ork7qlKndVw=", "113zhCcyxaI=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy one for two" : [ "cH9E5WE9MAg=", "Lx+Iu3Li/mg=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy two for five" : [ "9wksnZF1zQU=", "DEJpPfg7Y2A=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 20|buy two for one" : [ "2845iDhc7cM=", "MIKp65Kyol8=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 21" : 
+	"manage buy offer exactly crosses existing offers|protocol version 22" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -285,11 +258,64 @@
 		"RLfXSaItxO4=",
 		"cf7g8T0DhvY="
 	],
-	"manage buy offer exactly crosses existing offers|protocol version 21|buy five for two" : [ "f2Jax9dKFZA=", "IMjgcSt8R8k=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 21|buy one for one" : [ "ork7qlKndVw=", "113zhCcyxaI=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 21|buy one for two" : [ "cH9E5WE9MAg=", "Lx+Iu3Li/mg=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 21|buy two for five" : [ "9wksnZF1zQU=", "DEJpPfg7Y2A=" ],
-	"manage buy offer exactly crosses existing offers|protocol version 21|buy two for one" : [ "2845iDhc7cM=", "MIKp65Kyol8=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy five for two" : [ "f2Jax9dKFZA=", "IMjgcSt8R8k=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy one for one" : [ "ork7qlKndVw=", "113zhCcyxaI=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy one for two" : [ "cH9E5WE9MAg=", "Lx+Iu3Li/mg=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy two for five" : [ "9wksnZF1zQU=", "DEJpPfg7Y2A=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 22|buy two for one" : [ "2845iDhc7cM=", "MIKp65Kyol8=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 23" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"OxFzoCxBIOo=",
+		"GIBSYiKtZSM=",
+		"gXmFDHjVy2Q=",
+		"vUEu2GE4UYc=",
+		"RLfXSaItxO4=",
+		"cf7g8T0DhvY="
+	],
+	"manage buy offer exactly crosses existing offers|protocol version 23|buy five for two" : [ "f2Jax9dKFZA=", "IMjgcSt8R8k=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 23|buy one for one" : [ "ork7qlKndVw=", "113zhCcyxaI=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 23|buy one for two" : [ "cH9E5WE9MAg=", "Lx+Iu3Li/mg=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 23|buy two for five" : [ "9wksnZF1zQU=", "DEJpPfg7Y2A=" ],
+	"manage buy offer exactly crosses existing offers|protocol version 23|buy two for one" : [ "2845iDhc7cM=", "MIKp65Kyol8=" ],
 	"manage buy offer exactly crosses existing offers|protocol version 3" : 
 	[
 		"0V3jr/3FY6U=",
@@ -397,7 +423,11 @@
 	"manage buy offer failure modes|protocol version 19" : [ "NKNcX4DjYng=", "T+IeLTijUbo=", "NKNcX4DjYng=", "T+IeLTijUbo=" ],
 	"manage buy offer failure modes|protocol version 19|negative offerID" : [ "ELdDEpcNC24=" ],
 	"manage buy offer failure modes|protocol version 2" : [ "pSsR7xl1ZzY=", "OaXP621I0jI=", "pSsR7xl1ZzY=", "OaXP621I0jI=" ],
-	"manage buy offer failure modes|protocol version 20" : 
+	"manage buy offer failure modes|protocol version 20" : [ "9dXbtfL8fWA=", "hhLRGp7Bj1U=", "9dXbtfL8fWA=", "hhLRGp7Bj1U=" ],
+	"manage buy offer failure modes|protocol version 20|negative offerID" : [ "yPMAWpGp2E0=" ],
+	"manage buy offer failure modes|protocol version 21" : [ "9dXbtfL8fWA=", "hhLRGp7Bj1U=", "9dXbtfL8fWA=", "hhLRGp7Bj1U=" ],
+	"manage buy offer failure modes|protocol version 21|negative offerID" : [ "yPMAWpGp2E0=" ],
+	"manage buy offer failure modes|protocol version 22" : 
 	[
 		"9dXbtfL8fWA=",
 		"hhLRGp7Bj1U=",
@@ -440,9 +470,9 @@
 		"9dXbtfL8fWA=",
 		"hhLRGp7Bj1U="
 	],
-	"manage buy offer failure modes|protocol version 20|check offer valid|buy no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|buy not authorized" : [ "sTij86uB8RY=", "j5mS8c/IkIM=", "d+LDJudqBVE=", "W09yiumqHx0=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|no issuer" : 
+	"manage buy offer failure modes|protocol version 22|check offer valid|buy no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|buy not authorized" : [ "sTij86uB8RY=", "j5mS8c/IkIM=", "d+LDJudqBVE=", "W09yiumqHx0=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|no issuer" : 
 	[
 		"vrcpoTS4ADg=",
 		"x0/JBz5sTJI=",
@@ -453,11 +483,11 @@
 		"72LJWDmaLfo=",
 		"zPajUjXRuV0="
 	],
-	"manage buy offer failure modes|protocol version 20|check offer valid|no issuer|buy no issuer" : [ "rJJm0hUR9OA=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|no issuer|sell no issuer" : [ "/k5kLi2BScI=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|sell no balance" : [ "/l+eA7wt7z4=", "th4n5fNLbMs=", "YWi+HK7TYMc=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|sell no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check offer valid|sell not authorized" : 
+	"manage buy offer failure modes|protocol version 22|check offer valid|no issuer|buy no issuer" : [ "rJJm0hUR9OA=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|no issuer|sell no issuer" : [ "/k5kLi2BScI=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|sell no balance" : [ "/l+eA7wt7z4=", "th4n5fNLbMs=", "YWi+HK7TYMc=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|sell no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check offer valid|sell not authorized" : 
 	[
 		"llEyEz9zLMU=",
 		"j5mS8c/IkIM=",
@@ -467,14 +497,14 @@
 		"1E+w+N7PB7I=",
 		"6rbHXJ+i/uw="
 	],
-	"manage buy offer failure modes|protocol version 20|check valid|buying and selling same asset" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|buying asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|delete and create" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|negative amount" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|non-positive price denominator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|non-positive price numerator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
-	"manage buy offer failure modes|protocol version 20|check valid|selling asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 20|compute offer exchange parameters|buying liabilities" : 
+	"manage buy offer failure modes|protocol version 22|check valid|buying and selling same asset" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|buying asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|delete and create" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|negative amount" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|non-positive price denominator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|non-positive price numerator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 22|check valid|selling asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 22|compute offer exchange parameters|buying liabilities" : 
 	[
 		"OEq7NNkTw2Y=",
 		"xDXuncg7G7M=",
@@ -485,7 +515,7 @@
 		"/lqrf/sMCZc=",
 		"PibsXuAnxio="
 	],
-	"manage buy offer failure modes|protocol version 20|compute offer exchange parameters|reserve" : 
+	"manage buy offer failure modes|protocol version 22|compute offer exchange parameters|reserve" : 
 	[
 		"SSW1pG7COBo=",
 		"+i2TO4g1rt8=",
@@ -500,7 +530,7 @@
 		"yxcoWcTr3Hc=",
 		"zsj8khzi9Pw="
 	],
-	"manage buy offer failure modes|protocol version 20|compute offer exchange parameters|selling liabilities" : 
+	"manage buy offer failure modes|protocol version 22|compute offer exchange parameters|selling liabilities" : 
 	[
 		"OEq7NNkTw2Y=",
 		"xDXuncg7G7M=",
@@ -510,8 +540,8 @@
 		"IW5RzBoTYAE=",
 		"dy48BUDNKNs="
 	],
-	"manage buy offer failure modes|protocol version 20|negative offerID" : [ "yPMAWpGp2E0=" ],
-	"manage buy offer failure modes|protocol version 20|offer must exist and be owned by source account to modify or delete" : 
+	"manage buy offer failure modes|protocol version 22|negative offerID" : [ "yPMAWpGp2E0=" ],
+	"manage buy offer failure modes|protocol version 22|offer must exist and be owned by source account to modify or delete" : 
 	[
 		"vrcpoTS4ADg=",
 		"x0/JBz5sTJI=",
@@ -528,7 +558,7 @@
 		"zsN++/TwWhg=",
 		"i3oJ+v48Bgo="
 	],
-	"manage buy offer failure modes|protocol version 21" : 
+	"manage buy offer failure modes|protocol version 23" : 
 	[
 		"9dXbtfL8fWA=",
 		"hhLRGp7Bj1U=",
@@ -571,9 +601,9 @@
 		"9dXbtfL8fWA=",
 		"hhLRGp7Bj1U="
 	],
-	"manage buy offer failure modes|protocol version 21|check offer valid|buy no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 21|check offer valid|buy not authorized" : [ "sTij86uB8RY=", "j5mS8c/IkIM=", "d+LDJudqBVE=", "W09yiumqHx0=" ],
-	"manage buy offer failure modes|protocol version 21|check offer valid|no issuer" : 
+	"manage buy offer failure modes|protocol version 23|check offer valid|buy no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 23|check offer valid|buy not authorized" : [ "sTij86uB8RY=", "j5mS8c/IkIM=", "d+LDJudqBVE=", "W09yiumqHx0=" ],
+	"manage buy offer failure modes|protocol version 23|check offer valid|no issuer" : 
 	[
 		"vrcpoTS4ADg=",
 		"x0/JBz5sTJI=",
@@ -584,11 +614,11 @@
 		"72LJWDmaLfo=",
 		"zPajUjXRuV0="
 	],
-	"manage buy offer failure modes|protocol version 21|check offer valid|no issuer|buy no issuer" : [ "rJJm0hUR9OA=" ],
-	"manage buy offer failure modes|protocol version 21|check offer valid|no issuer|sell no issuer" : [ "/k5kLi2BScI=" ],
-	"manage buy offer failure modes|protocol version 21|check offer valid|sell no balance" : [ "/l+eA7wt7z4=", "th4n5fNLbMs=", "YWi+HK7TYMc=" ],
-	"manage buy offer failure modes|protocol version 21|check offer valid|sell no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 21|check offer valid|sell not authorized" : 
+	"manage buy offer failure modes|protocol version 23|check offer valid|no issuer|buy no issuer" : [ "rJJm0hUR9OA=" ],
+	"manage buy offer failure modes|protocol version 23|check offer valid|no issuer|sell no issuer" : [ "/k5kLi2BScI=" ],
+	"manage buy offer failure modes|protocol version 23|check offer valid|sell no balance" : [ "/l+eA7wt7z4=", "th4n5fNLbMs=", "YWi+HK7TYMc=" ],
+	"manage buy offer failure modes|protocol version 23|check offer valid|sell no trust" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 23|check offer valid|sell not authorized" : 
 	[
 		"llEyEz9zLMU=",
 		"j5mS8c/IkIM=",
@@ -598,14 +628,14 @@
 		"1E+w+N7PB7I=",
 		"6rbHXJ+i/uw="
 	],
-	"manage buy offer failure modes|protocol version 21|check valid|buying and selling same asset" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 21|check valid|buying asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 21|check valid|delete and create" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 21|check valid|negative amount" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 21|check valid|non-positive price denominator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
-	"manage buy offer failure modes|protocol version 21|check valid|non-positive price numerator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
-	"manage buy offer failure modes|protocol version 21|check valid|selling asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
-	"manage buy offer failure modes|protocol version 21|compute offer exchange parameters|buying liabilities" : 
+	"manage buy offer failure modes|protocol version 23|check valid|buying and selling same asset" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 23|check valid|buying asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 23|check valid|delete and create" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 23|check valid|negative amount" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 23|check valid|non-positive price denominator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 23|check valid|non-positive price numerator" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=", "gaZ6Hv5AMb0=" ],
+	"manage buy offer failure modes|protocol version 23|check valid|selling asset not valid" : [ "/l+eA7wt7z4=", "6fhmod2rQbY=" ],
+	"manage buy offer failure modes|protocol version 23|compute offer exchange parameters|buying liabilities" : 
 	[
 		"OEq7NNkTw2Y=",
 		"xDXuncg7G7M=",
@@ -616,7 +646,7 @@
 		"/lqrf/sMCZc=",
 		"PibsXuAnxio="
 	],
-	"manage buy offer failure modes|protocol version 21|compute offer exchange parameters|reserve" : 
+	"manage buy offer failure modes|protocol version 23|compute offer exchange parameters|reserve" : 
 	[
 		"SSW1pG7COBo=",
 		"+i2TO4g1rt8=",
@@ -631,7 +661,7 @@
 		"yxcoWcTr3Hc=",
 		"zsj8khzi9Pw="
 	],
-	"manage buy offer failure modes|protocol version 21|compute offer exchange parameters|selling liabilities" : 
+	"manage buy offer failure modes|protocol version 23|compute offer exchange parameters|selling liabilities" : 
 	[
 		"OEq7NNkTw2Y=",
 		"xDXuncg7G7M=",
@@ -641,8 +671,8 @@
 		"IW5RzBoTYAE=",
 		"dy48BUDNKNs="
 	],
-	"manage buy offer failure modes|protocol version 21|negative offerID" : [ "yPMAWpGp2E0=" ],
-	"manage buy offer failure modes|protocol version 21|offer must exist and be owned by source account to modify or delete" : 
+	"manage buy offer failure modes|protocol version 23|negative offerID" : [ "yPMAWpGp2E0=" ],
+	"manage buy offer failure modes|protocol version 23|offer must exist and be owned by source account to modify or delete" : 
 	[
 		"vrcpoTS4ADg=",
 		"x0/JBz5sTJI=",
@@ -776,6 +806,22 @@
 		"HXWRSmG+rKE=",
 		"T2T23nzwrC4=",
 		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 21" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
 		"fnKlD+pmstc=",
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -818,7 +864,7 @@
 		"VqSyipOoncY=",
 		"fnKlD+pmstc="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell five for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -837,7 +883,7 @@
 		"55Lx77kiwtA=",
 		"7cHy+Bv7zJM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell one for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -856,7 +902,7 @@
 		"QN+sMl1qzsE=",
 		"zB5aj4A/in0="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell one for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -875,7 +921,7 @@
 		"Z8QOa2Lf1Js=",
 		"4oGh2Vm2WuM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell two for five" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -894,7 +940,7 @@
 		"ADL3jCN5is4=",
 		"Oe3PjnrWUxM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with no rounding|sell two for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -913,7 +959,7 @@
 		"oTZXPqCpx3A=",
 		"wOdl1LjGioo="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell five for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -932,7 +978,7 @@
 		"55Lx77kiwtA=",
 		"5+ugJFCIH+w="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell one for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -951,7 +997,7 @@
 		"Z8QOa2Lf1Js=",
 		"4oGh2Vm2WuM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell two for five" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -970,7 +1016,7 @@
 		"ADL3jCN5is4=",
 		"Oe3PjnrWUxM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 20|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 22|with rounding|sell two for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -989,7 +1035,7 @@
 		"oTZXPqCpx3A=",
 		"MkupXHhVE5g="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -1037,7 +1083,7 @@
 		"VqSyipOoncY=",
 		"fnKlD+pmstc="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with no rounding|sell five for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1056,7 +1102,7 @@
 		"55Lx77kiwtA=",
 		"7cHy+Bv7zJM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with no rounding|sell one for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1075,7 +1121,7 @@
 		"QN+sMl1qzsE=",
 		"zB5aj4A/in0="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with no rounding|sell one for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1094,7 +1140,7 @@
 		"Z8QOa2Lf1Js=",
 		"4oGh2Vm2WuM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with no rounding|sell two for five" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1113,7 +1159,7 @@
 		"ADL3jCN5is4=",
 		"Oe3PjnrWUxM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with no rounding|sell two for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1132,7 +1178,7 @@
 		"oTZXPqCpx3A=",
 		"wOdl1LjGioo="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with rounding|sell five for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1151,7 +1197,7 @@
 		"55Lx77kiwtA=",
 		"5+ugJFCIH+w="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with rounding|sell one for two" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1170,7 +1216,7 @@
 		"Z8QOa2Lf1Js=",
 		"4oGh2Vm2WuM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with rounding|sell two for five" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1189,7 +1235,7 @@
 		"ADL3jCN5is4=",
 		"Oe3PjnrWUxM="
 	],
-	"manage buy offer matches manage sell offer when executing entirely|protocol version 21|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing entirely|protocol version 23|with rounding|sell two for one" : 
 	[
 		"P8vF8lE6r20=",
 		"byrhUNudfmU=",
@@ -1374,6 +1420,22 @@
 		"HXWRSmG+rKE=",
 		"T2T23nzwrC4=",
 		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 21" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
+		"fnKlD+pmstc="
+	],
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"VqSyipOoncY=",
 		"fnKlD+pmstc=",
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -1416,7 +1478,7 @@
 		"VqSyipOoncY=",
 		"fnKlD+pmstc="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell five for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1435,7 +1497,7 @@
 		"o2VQHswA9Js=",
 		"IkXWBoQ+FI4="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell one for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1454,7 +1516,7 @@
 		"ig37ctqOVD8=",
 		"Vh+ZmVe3J3g="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell one for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1473,7 +1535,7 @@
 		"4z5heX2BbGo=",
 		"2oeLF7ukrG0="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell two for five" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1492,7 +1554,7 @@
 		"lk2yZFPMDpU=",
 		"CumCCVzfkwQ="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with no rounding|sell two for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1511,7 +1573,7 @@
 		"m3H+2Oww4Kk=",
 		"RxnJOuhImAU="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell five for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1530,7 +1592,7 @@
 		"o2VQHswA9Js=",
 		"kD46nG3cuGo="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell one for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1549,7 +1611,7 @@
 		"4z5heX2BbGo=",
 		"2oeLF7ukrG0="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell two for five" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1568,7 +1630,7 @@
 		"lk2yZFPMDpU=",
 		"CumCCVzfkwQ="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 20|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 22|with rounding|sell two for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1587,7 +1649,7 @@
 		"m3H+2Oww4Kk=",
 		"xteIEp3vQuQ="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -1635,7 +1697,7 @@
 		"VqSyipOoncY=",
 		"fnKlD+pmstc="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with no rounding|sell five for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1654,7 +1716,7 @@
 		"o2VQHswA9Js=",
 		"IkXWBoQ+FI4="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with no rounding|sell one for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1673,7 +1735,7 @@
 		"ig37ctqOVD8=",
 		"Vh+ZmVe3J3g="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with no rounding|sell one for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1692,7 +1754,7 @@
 		"4z5heX2BbGo=",
 		"2oeLF7ukrG0="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with no rounding|sell two for five" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1711,7 +1773,7 @@
 		"lk2yZFPMDpU=",
 		"CumCCVzfkwQ="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with no rounding|sell two for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1730,7 +1792,7 @@
 		"m3H+2Oww4Kk=",
 		"RxnJOuhImAU="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with rounding|sell five for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1749,7 +1811,7 @@
 		"o2VQHswA9Js=",
 		"kD46nG3cuGo="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with rounding|sell one for two" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1768,7 +1830,7 @@
 		"4z5heX2BbGo=",
 		"2oeLF7ukrG0="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with rounding|sell two for five" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1787,7 +1849,7 @@
 		"lk2yZFPMDpU=",
 		"CumCCVzfkwQ="
 	],
-	"manage buy offer matches manage sell offer when executing partially|protocol version 21|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when executing partially|protocol version 23|with rounding|sell two for one" : 
 	[
 		"6VP5Lm2ROJ4=",
 		"3lAZ7SdAvlo=",
@@ -1875,7 +1937,9 @@
 	"manage buy offer matches manage sell offer when not executing|protocol version 18" : [ "SOm0iEESjQ4=", "EOCYn1h4YxQ=", "6zTp9s2F2J8=" ],
 	"manage buy offer matches manage sell offer when not executing|protocol version 19" : [ "aQnJD/5Fe6M=", "9Vyygu3vRUU=", "CfIA/nz+th4=" ],
 	"manage buy offer matches manage sell offer when not executing|protocol version 2" : [ "0V3jr/3FY6U=", "51b61LbEuXc=", "XBao9BgO1jU=" ],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 20" : [ "Vazya62AJ3s=", "HXWRSmG+rKE=", "T2T23nzwrC4=" ],
+	"manage buy offer matches manage sell offer when not executing|protocol version 21" : [ "Vazya62AJ3s=", "HXWRSmG+rKE=", "T2T23nzwrC4=" ],
+	"manage buy offer matches manage sell offer when not executing|protocol version 22" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -1905,7 +1969,7 @@
 		"HXWRSmG+rKE=",
 		"T2T23nzwrC4="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell five for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1916,7 +1980,7 @@
 		"aTL86/B18Dw=",
 		"pD7tbrT1ol8="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell one for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1927,7 +1991,7 @@
 		"aTL86/B18Dw=",
 		"zzzl1v91Hi0="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell one for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1938,7 +2002,7 @@
 		"aTL86/B18Dw=",
 		"s2qjgyhgSAg="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell two for five" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1949,7 +2013,7 @@
 		"aTL86/B18Dw=",
 		"mX2g1raoCHQ="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with no rounding|sell two for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1960,7 +2024,7 @@
 		"aTL86/B18Dw=",
 		"+PMhuiQN1v0="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell five for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1971,7 +2035,7 @@
 		"aTL86/B18Dw=",
 		"/NgThMLl5/o="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell one for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1982,7 +2046,7 @@
 		"aTL86/B18Dw=",
 		"s2qjgyhgSAg="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell two for five" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -1993,7 +2057,7 @@
 		"aTL86/B18Dw=",
 		"mX2g1raoCHQ="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 20|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 22|with rounding|sell two for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2004,7 +2068,7 @@
 		"aTL86/B18Dw=",
 		"DiY9yNqGZcQ="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -2034,7 +2098,7 @@
 		"HXWRSmG+rKE=",
 		"T2T23nzwrC4="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with no rounding|sell five for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2045,7 +2109,7 @@
 		"aTL86/B18Dw=",
 		"pD7tbrT1ol8="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell one for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with no rounding|sell one for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2056,7 +2120,7 @@
 		"aTL86/B18Dw=",
 		"zzzl1v91Hi0="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with no rounding|sell one for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2067,7 +2131,7 @@
 		"aTL86/B18Dw=",
 		"s2qjgyhgSAg="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with no rounding|sell two for five" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2078,7 +2142,7 @@
 		"aTL86/B18Dw=",
 		"mX2g1raoCHQ="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with no rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with no rounding|sell two for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2089,7 +2153,7 @@
 		"aTL86/B18Dw=",
 		"+PMhuiQN1v0="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell five for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with rounding|sell five for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2100,7 +2164,7 @@
 		"aTL86/B18Dw=",
 		"/NgThMLl5/o="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell one for two" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with rounding|sell one for two" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2111,7 +2175,7 @@
 		"aTL86/B18Dw=",
 		"s2qjgyhgSAg="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell two for five" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with rounding|sell two for five" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2122,7 +2186,7 @@
 		"aTL86/B18Dw=",
 		"mX2g1raoCHQ="
 	],
-	"manage buy offer matches manage sell offer when not executing|protocol version 21|with rounding|sell two for one" : 
+	"manage buy offer matches manage sell offer when not executing|protocol version 23|with rounding|sell two for one" : 
 	[
 		"yFVy0ZJjNj0=",
 		"W/8omk8Fl9c=",
@@ -2250,16 +2314,17 @@
 		"HXWRSmG+rKE=",
 		"rqcii/+UbMY=",
 		"cTGj2lfDAFw=",
-		"L0hCYphMZHo=",
+		"L0hCYphMZHo="
+	],
+	"manage buy offer releases liabilities before modify|protocol version 21" : 
+	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
 		"rqcii/+UbMY=",
 		"cTGj2lfDAFw=",
 		"L0hCYphMZHo="
 	],
-	"manage buy offer releases liabilities before modify|protocol version 20|change amount" : [ "/mSIIR+0ghc=", "7gTN3fWAlpI=", "X0uANRIoe7o=" ],
-	"manage buy offer releases liabilities before modify|protocol version 20|change price" : [ "6nuK5jPfdhk=", "wucDq+9ZZxY=", "X0uANRIoe7o=" ],
-	"manage buy offer releases liabilities before modify|protocol version 21" : 
+	"manage buy offer releases liabilities before modify|protocol version 22" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -2272,8 +2337,23 @@
 		"cTGj2lfDAFw=",
 		"L0hCYphMZHo="
 	],
-	"manage buy offer releases liabilities before modify|protocol version 21|change amount" : [ "/mSIIR+0ghc=", "7gTN3fWAlpI=", "X0uANRIoe7o=" ],
-	"manage buy offer releases liabilities before modify|protocol version 21|change price" : [ "6nuK5jPfdhk=", "wucDq+9ZZxY=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 22|change amount" : [ "/mSIIR+0ghc=", "7gTN3fWAlpI=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 22|change price" : [ "6nuK5jPfdhk=", "wucDq+9ZZxY=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 23" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"rqcii/+UbMY=",
+		"cTGj2lfDAFw=",
+		"L0hCYphMZHo=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"rqcii/+UbMY=",
+		"cTGj2lfDAFw=",
+		"L0hCYphMZHo="
+	],
+	"manage buy offer releases liabilities before modify|protocol version 23|change amount" : [ "/mSIIR+0ghc=", "7gTN3fWAlpI=", "X0uANRIoe7o=" ],
+	"manage buy offer releases liabilities before modify|protocol version 23|change price" : [ "6nuK5jPfdhk=", "wucDq+9ZZxY=", "X0uANRIoe7o=" ],
 	"manage buy offer releases liabilities before modify|protocol version 3" : 
 	[
 		"0V3jr/3FY6U=",
@@ -2496,7 +2576,10 @@
 		"d85+xcvkJPo=",
 		"U+fRGjopoIc=",
 		"CbDefR/RfQM=",
-		"BLCzQbTCc+4=",
+		"BLCzQbTCc+4="
+	],
+	"manage buy offer with zero liabilities|protocol version 21" : 
+	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
 		"T2T23nzwrC4=",
@@ -2507,9 +2590,7 @@
 		"CbDefR/RfQM=",
 		"BLCzQbTCc+4="
 	],
-	"manage buy offer with zero liabilities|protocol version 20|offer had zero liabilities after executing partially" : [ "E8nLigRk1Ak=", "+15LPHGxBRo=" ],
-	"manage buy offer with zero liabilities|protocol version 20|offer initially had zero liabilities and does not execute" : [ "SILhPejHYnI=" ],
-	"manage buy offer with zero liabilities|protocol version 21" : 
+	"manage buy offer with zero liabilities|protocol version 22" : 
 	[
 		"Vazya62AJ3s=",
 		"HXWRSmG+rKE=",
@@ -2530,8 +2611,31 @@
 		"CbDefR/RfQM=",
 		"BLCzQbTCc+4="
 	],
-	"manage buy offer with zero liabilities|protocol version 21|offer had zero liabilities after executing partially" : [ "E8nLigRk1Ak=", "+15LPHGxBRo=" ],
-	"manage buy offer with zero liabilities|protocol version 21|offer initially had zero liabilities and does not execute" : [ "SILhPejHYnI=" ],
+	"manage buy offer with zero liabilities|protocol version 22|offer had zero liabilities after executing partially" : [ "E8nLigRk1Ak=", "+15LPHGxBRo=" ],
+	"manage buy offer with zero liabilities|protocol version 22|offer initially had zero liabilities and does not execute" : [ "SILhPejHYnI=" ],
+	"manage buy offer with zero liabilities|protocol version 23" : 
+	[
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"U+fRGjopoIc=",
+		"CbDefR/RfQM=",
+		"BLCzQbTCc+4=",
+		"Vazya62AJ3s=",
+		"HXWRSmG+rKE=",
+		"T2T23nzwrC4=",
+		"yFVy0ZJjNj0=",
+		"W/8omk8Fl9c=",
+		"d85+xcvkJPo=",
+		"U+fRGjopoIc=",
+		"CbDefR/RfQM=",
+		"BLCzQbTCc+4="
+	],
+	"manage buy offer with zero liabilities|protocol version 23|offer had zero liabilities after executing partially" : [ "E8nLigRk1Ak=", "+15LPHGxBRo=" ],
+	"manage buy offer with zero liabilities|protocol version 23|offer initially had zero liabilities and does not execute" : [ "SILhPejHYnI=" ],
 	"manage buy offer with zero liabilities|protocol version 3" : 
 	[
 		"0V3jr/3FY6U=",

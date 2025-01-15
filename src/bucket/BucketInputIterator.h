@@ -4,9 +4,8 @@
 // under the Apache License, Version 2.0. See the COPYING file at the root
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
-#include "bucket/LedgerCmp.h"
+#include "bucket/BucketUtils.h"
 #include "util/XDRStream.h"
-#include "xdr/Stellar-ledger.h"
 
 #include <memory>
 
@@ -14,18 +13,22 @@ namespace stellar
 {
 
 class Bucket;
+class LiveBucket;
+class HotArchiveBucket;
 
 // Helper class that reads through the entries in a bucket.
-class BucketInputIterator
+template <typename BucketT> class BucketInputIterator
 {
-    std::shared_ptr<Bucket const> mBucket;
+    BUCKET_TYPE_ASSERT(BucketT);
+
+    std::shared_ptr<BucketT const> mBucket;
 
     // Validity and current-value of the iterator is funneled into a
     // pointer. If
     // non-null, it points to mEntry.
-    BucketEntry const* mEntryPtr{nullptr};
+    typename BucketT::EntryT const* mEntryPtr{nullptr};
     XDRInputFileStream mIn;
-    BucketEntry mEntry;
+    typename BucketT::EntryT mEntry;
     bool mSeenMetadata{false};
     bool mSeenOtherEntries{false};
     BucketMetadata mMetadata;
@@ -44,15 +47,16 @@ class BucketInputIterator
     bool seenMetadata() const;
     BucketMetadata const& getMetadata() const;
 
-    BucketEntry const& operator*();
+    typename BucketT::EntryT const& operator*();
 
-    BucketInputIterator(std::shared_ptr<Bucket const> bucket);
+    BucketInputIterator(std::shared_ptr<BucketT const> bucket);
 
     ~BucketInputIterator();
 
     BucketInputIterator& operator++();
 
-    size_t pos();
+    std::streamoff pos();
     size_t size() const;
+    void seek(std::streamoff offset);
 };
 }

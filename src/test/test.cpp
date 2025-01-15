@@ -96,7 +96,7 @@ struct TestContextListener : Catch::TestEventListenerBase
     {
         if (gTestTxMetaMode != TestTxMetaMode::META_TEST_IGNORE)
         {
-            assertThreadIsMain();
+            releaseAssert(threadIsMain());
             releaseAssert(!sTestCtx.has_value());
             sTestCtx.emplace(testInfo);
         }
@@ -106,7 +106,7 @@ struct TestContextListener : Catch::TestEventListenerBase
     {
         if (gTestTxMetaMode != TestTxMetaMode::META_TEST_IGNORE)
         {
-            assertThreadIsMain();
+            releaseAssert(threadIsMain());
             releaseAssert(sTestCtx.has_value());
             releaseAssert(sSectCtx.empty());
             sTestCtx.reset();
@@ -117,7 +117,7 @@ struct TestContextListener : Catch::TestEventListenerBase
     {
         if (gTestTxMetaMode != TestTxMetaMode::META_TEST_IGNORE)
         {
-            assertThreadIsMain();
+            releaseAssert(threadIsMain());
             sSectCtx.emplace_back(sectionInfo);
         }
     }
@@ -126,7 +126,7 @@ struct TestContextListener : Catch::TestEventListenerBase
     {
         if (gTestTxMetaMode != TestTxMetaMode::META_TEST_IGNORE)
         {
-            assertThreadIsMain();
+            releaseAssert(threadIsMain());
             sSectCtx.pop_back();
         }
     }
@@ -194,11 +194,12 @@ getTestConfig(int instanceNumber, Config::TestDbMode mode)
     instanceNumber += gBaseInstance;
     if (mode == Config::TESTDB_DEFAULT)
     {
-        // by default, tests should be run with in memory SQLITE as it's faster
-        // you can change this by enabling the appropriate line below
-        mode = Config::TESTDB_IN_MEMORY_SQLITE;
-        // mode = Config::TESTDB_ON_DISK_SQLITE;
+        // by default, tests should be run with volatile BucketList as it's
+        // faster. You can change this by enabling the appropriate line below
+        // mode = Config::TESTDB_IN_MEMORY;
+        // mode = Config::TESTDB_BUCKET_DB_PERSISTENT;
         // mode = Config::TESTDB_POSTGRESQL;
+        mode = Config::TESTDB_BUCKET_DB_VOLATILE;
     }
     auto& cfgs = gTestCfg[mode];
     if (cfgs.size() <= static_cast<size_t>(instanceNumber))
@@ -272,42 +273,62 @@ getTestConfig(int instanceNumber, Config::TestDbMode mode)
         thisConfig.QUORUM_SET.threshold = 1;
         thisConfig.UNSAFE_QUORUM = true;
 
+        // Bucket durability significantly slows down tests and is not necessary
+        // in most cases.
+        thisConfig.DISABLE_XDR_FSYNC = true;
+
         thisConfig.NETWORK_PASSPHRASE = "(V) (;,,;) (V)";
 
         std::ostringstream dbname;
         switch (mode)
         {
-        case Config::TESTDB_IN_MEMORY_SQLITE:
+        case Config::TESTDB_BUCKET_DB_VOLATILE:
+        case Config::TESTDB_IN_MEMORY:
             dbname << "sqlite3://:memory:";
-            // When we're running on an in-memory sqlite we're
-            // probably not concerned with bucket durability.
-            thisConfig.DISABLE_XDR_FSYNC = true;
             break;
-        case Config::TESTDB_ON_DISK_SQLITE:
+        case Config::TESTDB_BUCKET_DB_PERSISTENT:
             dbname << "sqlite3://" << rootDir << "test.db";
+            thisConfig.DISABLE_XDR_FSYNC = false;
             break;
 #ifdef USE_POSTGRES
+        case Config::TESTDB_BUCKET_DB_PERSISTENT_POSTGRES:
+            dbname << "postgresql://dbname=test" << instanceNumber;
+            thisConfig.DISABLE_XDR_FSYNC = false;
+            break;
         case Config::TESTDB_POSTGRESQL:
             dbname << "postgresql://dbname=test" << instanceNumber;
+            thisConfig.DISABLE_XDR_FSYNC = false;
             break;
 #endif
         default:
             abort();
         }
+
+        if (mode == Config::TESTDB_IN_MEMORY)
+        {
+            thisConfig.MODE_USES_IN_MEMORY_LEDGER = true;
+        }
+
         thisConfig.DATABASE = SecretValue{dbname.str()};
+
         thisConfig.REPORT_METRICS = gTestMetrics;
         // disable maintenance
         thisConfig.AUTOMATIC_MAINTENANCE_COUNT = 0;
         // disable self-check
         thisConfig.AUTOMATIC_SELF_CHECK_PERIOD = std::chrono::seconds(0);
         // only spin up a small number of worker threads
-        thisConfig.WORKER_THREADS = 2;
+        thisConfig.WORKER_THREADS = 3;
         thisConfig.QUORUM_INTERSECTION_CHECKER = false;
         thisConfig.METADATA_DEBUG_LEDGERS = 0;
 
         thisConfig.PEER_READING_CAPACITY = 20;
         thisConfig.PEER_FLOOD_READING_CAPACITY = 20;
         thisConfig.FLOW_CONTROL_SEND_MORE_BATCH_SIZE = 10;
+
+        // Disable RPC endpoint in tests
+        thisConfig.HTTP_QUERY_PORT = 0;
+        thisConfig.QUERY_SNAPSHOT_LEDGERS = 0;
+
 #ifdef BEST_OFFER_DEBUGGING
         thisConfig.BEST_OFFER_DEBUGGING_ENABLED = true;
 #endif
@@ -486,6 +507,13 @@ for_versions_from(std::vector<uint32> const& versions, Application& app,
 }
 
 void
+for_versions_from(uint32 from, Config const& cfg,
+                  std::function<void(Config const&)> const& f)
+{
+    for_versions(from, Config::CURRENT_LEDGER_PROTOCOL_VERSION, cfg, f);
+}
+
+void
 for_all_versions(Application& app, std::function<void(void)> const& f)
 {
     for_versions(1, Config::CURRENT_LEDGER_PROTOCOL_VERSION, app, f);
@@ -515,6 +543,21 @@ for_versions(uint32 from, uint32 to, Application& app,
 void
 for_versions(uint32 from, uint32 to, Config const& cfg,
              std::function<void(Config const&)> const& f)
+{
+    if (from > to)
+    {
+        return;
+    }
+    auto versions = std::vector<uint32>{};
+    versions.resize(to - from + 1);
+    std::iota(std::begin(versions), std::end(versions), from);
+
+    for_versions(versions, cfg, f);
+}
+
+void
+for_versions(uint32 from, uint32 to, Config const& cfg,
+             std::function<void(Config&)> const& f)
 {
     if (from > to)
     {
@@ -562,6 +605,22 @@ for_versions(std::vector<uint32> const& versions, Config const& cfg,
 }
 
 void
+for_versions(std::vector<uint32> const& versions, Config const& cfg,
+             std::function<void(Config&)> const& f)
+{
+    REQUIRE(gMustUseTestVersionsWrapper);
+
+    if (std::find(versions.begin(), versions.end(), gTestingVersion) !=
+        versions.end())
+    {
+        REQUIRE(cfg.TESTING_UPGRADE_LEDGER_PROTOCOL_VERSION == gTestingVersion);
+        Config vcfg = cfg;
+        vcfg.LEDGER_PROTOCOL_VERSION = gTestingVersion;
+        f(vcfg);
+    }
+}
+
+void
 for_all_versions_except(std::vector<uint32> const& versions, Application& app,
                         std::function<void(void)> const& f)
 {
@@ -584,7 +643,7 @@ logFatalAndThrow(std::string const& msg)
 static std::pair<stdfs::path, std::string>
 getCurrentTestContext()
 {
-    assertThreadIsMain();
+    releaseAssert(threadIsMain());
 
     releaseAssert(TestContextListener::sTestCtx.has_value());
     auto& tc = TestContextListener::sTestCtx.value();
@@ -623,7 +682,7 @@ recordOrCheckGlobalTestTxMetadata(TransactionMeta const& txMetaIn)
     {
         gDebugTestTxMeta.value()
             << "=== " << ctx.first << " : " << ctx.second << " ===" << std::endl
-            << xdr_to_string(txMeta, "TransactionMeta", false) << std::endl;
+            << xdrToCerealString(txMeta, "TransactionMeta", false) << std::endl;
     }
     uint64_t gotTxMetaHash = shortHash::xdrComputeHash(txMeta);
     if (gTestTxMetaMode == TestTxMetaMode::META_TEST_RECORD)

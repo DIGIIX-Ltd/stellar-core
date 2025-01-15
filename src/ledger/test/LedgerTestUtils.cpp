@@ -8,12 +8,14 @@
 #include "ledger/LedgerHashUtils.h"
 #include "ledger/NetworkConfig.h"
 #include "main/Config.h"
+#include "util/GlobalChecks.h"
 #include "util/Logging.h"
 #include "util/Math.h"
 #include "util/UnorderedSet.h"
 #include "util/types.h"
 #include "xdr/Stellar-contract.h"
 #include "xdr/Stellar-ledger-entries.h"
+#include "xdr/Stellar-types.h"
 #include <autocheck/generator.hpp>
 #include <locale>
 #include <string>
@@ -390,7 +392,20 @@ makeValid(std::vector<LedgerHeaderHistoryEntry>& lhv,
           LedgerHeaderHistoryEntry firstLedger,
           HistoryManager::LedgerVerificationStatus state)
 {
-    auto randomIndex = rand_uniform<size_t>(1, lhv.size() - 1);
+    // We want to avoid corrupting the 0th through 2nd entries, because we use
+    // these corrupt sequences in history tests that differentiate between
+    // failures that encounter local state, specifically the LCL (suggesting the
+    // local node has diverged), and those that don't (suggesting merely corrupt
+    // download material), and the LCL-encounters in these tests happen at
+    // ledger entry 64, entry 0 in the checkpoint.
+    //
+    // An undershot corruption at entry 2 will cause verification of to
+    // interpret it as entry 1 with a wrong prev-ptr pointing to entry 0 which
+    // is LCL, causing an LCL encounter. Any other corruption at entry 1 will
+    // similarly cause an LCL encounter. Corruptions at or beyond entry 3 are ok
+    // though.
+    releaseAssertOrThrow(lhv.size() > 3);
+    auto randomIndex = rand_uniform<size_t>(3, lhv.size() - 1);
     auto prevHash = firstLedger.header.previousLedgerHash;
     auto ledgerSeq = firstLedger.header.ledgerSeq;
 
@@ -423,7 +438,7 @@ makeValid(std::vector<LedgerHeaderHistoryEntry>& lhv,
                 break;
             }
         }
-        // On a coin flip, corrupt header content rather than previous link
+        // On a coin flip, corrupt header as well as previous link
         if (i == randomIndex &&
             state == HistoryManager::VERIFY_STATUS_ERR_BAD_HASH && rand_flip())
         {
@@ -622,6 +637,13 @@ std::vector<LedgerEntry>
 generateValidLedgerEntriesWithExclusions(
     std::unordered_set<LedgerEntryType> const& excludedTypes, size_t n)
 {
+
+    if (n > 1000)
+    {
+        throw "generateValidLedgerEntryWithExclusions: must generate <= 1000 "
+              "entries";
+    }
+
     std::vector<LedgerEntry> res;
     res.reserve(n);
     for (int i = 0; i < n; ++i)
@@ -635,6 +657,12 @@ std::vector<LedgerKey>
 generateValidLedgerEntryKeysWithExclusions(
     std::unordered_set<LedgerEntryType> const& excludedTypes, size_t n)
 {
+    if (n > 1000)
+    {
+        throw "generateValidLedgerEntryKeysWithExclusions: must generate <= "
+              "1000 entries";
+    }
+
     auto entries = LedgerTestUtils::generateValidLedgerEntriesWithExclusions(
         excludedTypes, n);
     std::vector<LedgerKey> keys;
@@ -677,6 +705,29 @@ generateValidUniqueLedgerEntryKeysWithExclusions(
     return res;
 }
 
+std::vector<LedgerEntry>
+generateValidUniqueLedgerEntriesWithExclusions(
+    std::unordered_set<LedgerEntryType> const& excludedTypes, size_t n)
+{
+    UnorderedSet<LedgerKey> keys;
+    std::vector<LedgerEntry> res;
+    keys.reserve(n);
+    res.reserve(n);
+    while (keys.size() < n)
+    {
+        auto entry = generateValidLedgerEntryWithExclusions(excludedTypes, n);
+        auto key = LedgerEntryKey(entry);
+        if (keys.find(key) != keys.end())
+        {
+            continue;
+        }
+
+        keys.insert(key);
+        res.emplace_back(entry);
+    }
+    return res;
+}
+
 LedgerEntry
 generateValidLedgerEntryWithTypes(
     std::unordered_set<LedgerEntryType> const& types, size_t b)
@@ -689,6 +740,29 @@ generateValidLedgerEntryWithTypes(
             return entry;
         }
     }
+}
+
+std::vector<LedgerKey>
+generateValidUniqueLedgerKeysWithTypes(
+    std::unordered_set<LedgerEntryType> const& types, size_t n,
+    UnorderedSet<LedgerKey>& seenKeys)
+{
+    std::vector<LedgerKey> res;
+    res.reserve(n);
+    while (res.size() < n)
+    {
+
+        auto entry = generateValidLedgerEntryWithTypes(types);
+        auto key = LedgerEntryKey(entry);
+        if (seenKeys.find(key) != seenKeys.end())
+        {
+            continue;
+        }
+
+        seenKeys.insert(key);
+        res.emplace_back(key);
+    }
+    return res;
 }
 
 std::vector<LedgerEntry>

@@ -4,15 +4,16 @@
 
 // clang-format off
 // This needs to be included first
+#include "rust/RustVecXdrMarshal.h"
 #include "TransactionUtils.h"
 #include "util/GlobalChecks.h"
+#include "util/ProtocolVersion.h"
 #include "xdr/Stellar-ledger-entries.h"
 #include <cstdint>
 #include <json/json.h>
 #include <medida/metrics_registry.h>
 #include <xdrpp/types.h>
 #include "xdr/Stellar-contract.h"
-#include "rust/RustVecXdrMarshal.h"
 // clang-format on
 
 #include "ledger/LedgerTxnImpl.h"
@@ -21,10 +22,14 @@
 #include <stdexcept>
 #include <xdrpp/xdrpp/printer.h>
 
+#include "ledger/LedgerManagerImpl.h"
 #include "ledger/LedgerTxn.h"
 #include "ledger/LedgerTxnEntry.h"
+#include "ledger/LedgerTypeUtils.h"
 #include "rust/RustBridge.h"
 #include "transactions/InvokeHostFunctionOpFrame.h"
+#include "transactions/MutableTransactionResult.h"
+#include <Tracy.hpp>
 #include <crypto/SHA.h>
 
 namespace stellar
@@ -52,7 +57,7 @@ toCxxBuf(T const& t)
 }
 
 CxxLedgerInfo
-getLedgerInfo(AbstractLedgerTxn& ltx, Application& app,
+getLedgerInfo(AbstractLedgerTxn& ltx, AppConnector& app,
               SorobanNetworkConfig const& sorobanConfig)
 {
     CxxLedgerInfo info{};
@@ -67,8 +72,13 @@ getLedgerInfo(AbstractLedgerTxn& ltx, Application& app,
     info.min_temp_entry_ttl =
         sorobanConfig.stateArchivalSettings().minTemporaryTTL;
     info.max_entry_ttl = sorobanConfig.stateArchivalSettings().maxEntryTTL;
-    info.cpu_cost_params = toCxxBuf(sorobanConfig.cpuCostParams());
-    info.mem_cost_params = toCxxBuf(sorobanConfig.memCostParams());
+
+    auto cpu = sorobanConfig.cpuCostParams();
+    auto mem = sorobanConfig.memCostParams();
+
+    info.cpu_cost_params = toCxxBuf(cpu);
+    info.mem_cost_params = toCxxBuf(mem);
+
     auto& networkID = app.getNetworkID();
     info.network_id.reserve(networkID.size());
     for (auto c : networkID)
@@ -97,7 +107,7 @@ metricsEvent(bool success, std::string&& topic, uint64_t value)
 
 struct HostFunctionMetrics
 {
-    medida::MetricsRegistry& mMetrics;
+    SorobanMetrics& mMetrics;
 
     uint32_t mReadEntry{0};
     uint32_t mWriteEntry{0};
@@ -121,6 +131,9 @@ struct HostFunctionMetrics
     uint64_t mCpuInsn{0};
     uint64_t mMemByte{0};
     uint64_t mInvokeTimeNsecs{0};
+    uint64_t mCpuInsnExclVm{0};
+    uint64_t mInvokeTimeNsecsExclVm{0};
+    uint64_t mDeclaredCpuInsn{0};
 
     // max single entity size metrics
     uint32_t mMaxReadWriteKeyByte{0};
@@ -130,7 +143,7 @@ struct HostFunctionMetrics
 
     bool mSuccess{false};
 
-    HostFunctionMetrics(medida::MetricsRegistry& metrics) : mMetrics(metrics)
+    HostFunctionMetrics(SorobanMetrics& metrics) : mMetrics(metrics)
     {
     }
 
@@ -173,76 +186,65 @@ struct HostFunctionMetrics
 
     ~HostFunctionMetrics()
     {
-        mMetrics.NewMeter({"soroban", "host-fn-op", "read-entry"}, "entry")
-            .Mark(mReadEntry);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "write-entry"}, "entry")
-            .Mark(mWriteEntry);
+        mMetrics.mHostFnOpReadEntry.Mark(mReadEntry);
+        mMetrics.mHostFnOpWriteEntry.Mark(mWriteEntry);
 
-        mMetrics.NewMeter({"soroban", "host-fn-op", "read-key-byte"}, "byte")
-            .Mark(mReadKeyByte);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "write-key-byte"}, "byte")
-            .Mark(mWriteKeyByte);
+        mMetrics.mHostFnOpReadKeyByte.Mark(mReadKeyByte);
+        mMetrics.mHostFnOpWriteKeyByte.Mark(mWriteKeyByte);
 
-        mMetrics.NewMeter({"soroban", "host-fn-op", "read-ledger-byte"}, "byte")
-            .Mark(mLedgerReadByte);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "read-data-byte"}, "byte")
-            .Mark(mReadDataByte);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "read-code-byte"}, "byte")
-            .Mark(mReadCodeByte);
+        mMetrics.mHostFnOpReadLedgerByte.Mark(mLedgerReadByte);
+        mMetrics.mHostFnOpReadDataByte.Mark(mReadDataByte);
+        mMetrics.mHostFnOpReadCodeByte.Mark(mReadCodeByte);
 
-        mMetrics
-            .NewMeter({"soroban", "host-fn-op", "write-ledger-byte"}, "byte")
-            .Mark(mLedgerWriteByte);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "write-data-byte"}, "byte")
-            .Mark(mWriteDataByte);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "write-code-byte"}, "byte")
-            .Mark(mWriteCodeByte);
+        mMetrics.mHostFnOpWriteLedgerByte.Mark(mLedgerWriteByte);
+        mMetrics.mHostFnOpWriteDataByte.Mark(mWriteDataByte);
+        mMetrics.mHostFnOpWriteCodeByte.Mark(mWriteCodeByte);
 
-        mMetrics.NewMeter({"soroban", "host-fn-op", "emit-event"}, "event")
-            .Mark(mEmitEvent);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "emit-event-byte"}, "byte")
-            .Mark(mEmitEventByte);
+        mMetrics.mHostFnOpEmitEvent.Mark(mEmitEvent);
+        mMetrics.mHostFnOpEmitEventByte.Mark(mEmitEventByte);
 
-        mMetrics.NewMeter({"soroban", "host-fn-op", "cpu-insn"}, "insn")
-            .Mark(mCpuInsn);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "mem-byte"}, "byte")
-            .Mark(mMemByte);
-        mMetrics
-            .NewMeter({"soroban", "host-fn-op", "invoke-time-nsecs"}, "time")
-            .Mark(mInvokeTimeNsecs);
+        mMetrics.mHostFnOpCpuInsn.Mark(mCpuInsn);
+        mMetrics.mHostFnOpMemByte.Mark(mMemByte);
+        mMetrics.mHostFnOpInvokeTimeNsecs.Update(
+            std::chrono::nanoseconds(mInvokeTimeNsecs));
+        mMetrics.mHostFnOpCpuInsnExclVm.Mark(mCpuInsnExclVm);
+        mMetrics.mHostFnOpInvokeTimeNsecsExclVm.Update(
+            std::chrono::nanoseconds(mInvokeTimeNsecsExclVm));
+        mMetrics.mHostFnOpInvokeTimeFsecsCpuInsnRatio.Update(
+            mInvokeTimeNsecs * 1000000 / std::max(mCpuInsn, uint64_t(1)));
+        mMetrics.mHostFnOpInvokeTimeFsecsCpuInsnRatioExclVm.Update(
+            mInvokeTimeNsecsExclVm * 1000000 /
+            std::max(mCpuInsnExclVm, uint64_t(1)));
+        mMetrics.mHostFnOpDeclaredInsnsUsageRatio.Update(
+            mCpuInsn * 1000000 / std::max(mDeclaredCpuInsn, uint64_t(1)));
 
-        mMetrics.NewMeter({"soroban", "host-fn-op", "max-rw-key-byte"}, "byte")
-            .Mark(mMaxReadWriteKeyByte);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "max-rw-data-byte"}, "byte")
-            .Mark(mMaxReadWriteDataByte);
-        mMetrics.NewMeter({"soroban", "host-fn-op", "max-rw-code-byte"}, "byte")
-            .Mark(mMaxReadWriteCodeByte);
-        mMetrics
-            .NewMeter({"soroban", "host-fn-op", "max-emit-event-byte"}, "byte")
-            .Mark(mMaxEmitEventByte);
+        mMetrics.mHostFnOpMaxRwKeyByte.Mark(mMaxReadWriteKeyByte);
+        mMetrics.mHostFnOpMaxRwDataByte.Mark(mMaxReadWriteDataByte);
+        mMetrics.mHostFnOpMaxRwCodeByte.Mark(mMaxReadWriteCodeByte);
+        mMetrics.mHostFnOpMaxEmitEventByte.Mark(mMaxEmitEventByte);
+
+        mMetrics.accumulateModelledCpuInsns(mCpuInsn, mCpuInsnExclVm,
+                                            mInvokeTimeNsecs);
 
         if (mSuccess)
         {
-            mMetrics.NewMeter({"soroban", "host-fn-op", "success"}, "call")
-                .Mark();
+            mMetrics.mHostFnOpSuccess.Mark();
         }
         else
         {
-            mMetrics.NewMeter({"soroban", "host-fn-op", "failure"}, "call")
-                .Mark();
+            mMetrics.mHostFnOpFailure.Mark();
         }
     }
     medida::TimerContext
     getExecTimer()
     {
-        return mMetrics.NewTimer({"soroban", "host-fn-op", "exec"}).TimeScope();
+        return mMetrics.mHostFnOpExec.TimeScope();
     }
 };
 
-InvokeHostFunctionOpFrame::InvokeHostFunctionOpFrame(Operation const& op,
-                                                     OperationResult& res,
-                                                     TransactionFrame& parentTx)
-    : OperationFrame(op, res, parentTx)
+InvokeHostFunctionOpFrame::InvokeHostFunctionOpFrame(
+    Operation const& op, TransactionFrame const& parentTx)
+    : OperationFrame(op, parentTx)
     , mInvokeHostFunction(mOperation.body.invokeHostFunctionOp())
 {
 }
@@ -253,17 +255,10 @@ InvokeHostFunctionOpFrame::isOpSupported(LedgerHeader const& header) const
     return header.ledgerVersion >= 20;
 }
 
-bool
-InvokeHostFunctionOpFrame::doApply(AbstractLedgerTxn& ltx)
-{
-    throw std::runtime_error(
-        "InvokeHostFunctionOpFrame::doApply needs Config and base PRNG seed");
-}
-
 void
 InvokeHostFunctionOpFrame::maybePopulateDiagnosticEvents(
     Config const& cfg, InvokeHostFunctionOutput const& output,
-    HostFunctionMetrics const& metrics)
+    HostFunctionMetrics const& metrics, SorobanTxData& sorobanData) const
 {
     if (cfg.ENABLE_SOROBAN_DIAGNOSTIC_EVENTS)
     {
@@ -309,6 +304,8 @@ InvokeHostFunctionOpFrame::maybePopulateDiagnosticEvents(
             metricsEvent(metrics.mSuccess, "mem_byte", metrics.mMemByte));
         diagnosticEvents.emplace_back(metricsEvent(
             metrics.mSuccess, "invoke_time_nsecs", metrics.mInvokeTimeNsecs));
+        // skip publishing `cpu_insn_excl_vm` and `invoke_time_nsecs_excl_vm`,
+        // we are mostly interested in those internally
         diagnosticEvents.emplace_back(metricsEvent(
             metrics.mSuccess, "max_rw_key_byte", metrics.mMaxReadWriteKeyByte));
         diagnosticEvents.emplace_back(
@@ -321,62 +318,41 @@ InvokeHostFunctionOpFrame::maybePopulateDiagnosticEvents(
                                                    "max_emit_event_byte",
                                                    metrics.mMaxEmitEventByte));
 
-        mParentTx.pushDiagnosticEvents(std::move(diagnosticEvents));
+        sorobanData.pushDiagnosticEvents(diagnosticEvents);
     }
 }
 
 bool
-InvokeHostFunctionOpFrame::validateContractLedgerEntry(
-    LedgerEntry const& le, size_t entrySize, SorobanNetworkConfig const& config)
+InvokeHostFunctionOpFrame::doApply(
+    AppConnector& app, AbstractLedgerTxn& ltx, Hash const& sorobanBasePrngSeed,
+    OperationResult& res, std::shared_ptr<SorobanTxData> sorobanData) const
 {
-    // check contract code size limit
-    if (le.data.type() == CONTRACT_CODE &&
-        config.maxContractSizeBytes() < le.data.contractCode().code.size())
-    {
-        mParentTx.pushSimpleDiagnosticError(
-            SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
-            "WASM size exceeds network config maximum contract size",
-            {makeU64SCVal(le.data.contractCode().code.size()),
-             makeU64SCVal(config.maxContractSizeBytes())});
-        return false;
-    }
-    // check contract data entry size limit
-    if (le.data.type() == CONTRACT_DATA &&
-        config.maxContractDataEntrySizeBytes() < entrySize)
-    {
-        mParentTx.pushSimpleDiagnosticError(
-            SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
-            "ContractData size exceeds network config maximum size",
-            {makeU64SCVal(entrySize),
-             makeU64SCVal(config.maxContractDataEntrySizeBytes())});
-        return false;
-    }
-    return true;
-}
+    releaseAssertOrThrow(sorobanData);
+    ZoneNamedN(applyZone, "InvokeHostFunctionOpFrame apply", true);
 
-bool
-InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
-                                   Hash const& sorobanBasePrngSeed)
-{
-    Config const& cfg = app.getConfig();
-    HostFunctionMetrics metrics(app.getMetrics());
-    auto const& sorobanConfig =
-        app.getLedgerManager().getSorobanNetworkConfig();
+    Config const& appConfig = app.getConfig();
+    HostFunctionMetrics metrics(app.getSorobanMetrics());
+    auto timeScope = metrics.getExecTimer();
+    auto const& sorobanConfig = app.getSorobanNetworkConfigForApply();
 
     // Get the entries for the footprint
     rust::Vec<CxxBuf> ledgerEntryCxxBufs;
     rust::Vec<CxxBuf> ttlEntryCxxBufs;
 
     auto const& resources = mParentTx.sorobanResources();
+    metrics.mDeclaredCpuInsn = resources.instructions;
+
     auto const& footprint = resources.footprint;
     auto footprintLength =
         footprint.readOnly.size() + footprint.readWrite.size();
+    auto hotArchive = app.copySearchableHotArchiveBucketListSnapshot();
 
     ledgerEntryCxxBufs.reserve(footprintLength);
     ttlEntryCxxBufs.reserve(footprintLength);
 
     auto addReads = [&ledgerEntryCxxBufs, &ttlEntryCxxBufs, &ltx, &metrics,
-                     &resources, this](auto const& keys) -> bool {
+                     &resources, &sorobanConfig, &appConfig, sorobanData, &res,
+                     &hotArchive, this](auto const& keys) -> bool {
         for (auto const& lk : keys)
         {
             uint32_t keySize = static_cast<uint32_t>(xdr::xdr_size(lk));
@@ -397,8 +373,28 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
                         // if the key did not exist
                         if (!isTemporaryEntry(lk))
                         {
+                            if (lk.type() == CONTRACT_CODE)
+                            {
+                                sorobanData->pushApplyTimeDiagnosticError(
+                                    appConfig, SCE_VALUE, SCEC_INVALID_INPUT,
+                                    "trying to access an archived contract "
+                                    "code "
+                                    "entry",
+                                    {makeBytesSCVal(lk.contractCode().hash)});
+                            }
+                            else if (lk.type() == CONTRACT_DATA)
+                            {
+                                sorobanData->pushApplyTimeDiagnosticError(
+                                    appConfig, SCE_VALUE, SCEC_INVALID_INPUT,
+                                    "trying to access an archived contract "
+                                    "data "
+                                    "entry",
+                                    {makeAddressSCVal(
+                                         lk.contractData().contract),
+                                     lk.contractData().key});
+                            }
                             // Cannot access an archived entry
-                            this->innerResult().code(
+                            this->innerResult(res).code(
                                 INVOKE_HOST_FUNCTION_ENTRY_ARCHIVED);
                             return false;
                         }
@@ -410,6 +406,40 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
                     }
                 }
                 // If ttlLtxe doesn't exist, this is a new Soroban entry
+                // Starting in protocol 23, we must check the Hot Archive for
+                // new keys. If a new key is actually archived, fail the op.
+                if (isPersistentEntry(lk) &&
+                    protocolVersionStartsFrom(
+                        ltx.getHeader().ledgerVersion,
+                        HotArchiveBucket::
+                            FIRST_PROTOCOL_SUPPORTING_PERSISTENT_EVICTION))
+                {
+                    auto archiveEntry = hotArchive->load(lk);
+                    if (archiveEntry)
+                    {
+                        if (lk.type() == CONTRACT_CODE)
+                        {
+                            sorobanData->pushApplyTimeDiagnosticError(
+                                appConfig, SCE_VALUE, SCEC_INVALID_INPUT,
+                                "trying to access an archived contract code "
+                                "entry",
+                                {makeBytesSCVal(lk.contractCode().hash)});
+                        }
+                        else if (lk.type() == CONTRACT_DATA)
+                        {
+                            sorobanData->pushApplyTimeDiagnosticError(
+                                appConfig, SCE_VALUE, SCEC_INVALID_INPUT,
+                                "trying to access an archived contract data "
+                                "entry",
+                                {makeAddressSCVal(lk.contractData().contract),
+                                 lk.contractData().key});
+                        }
+                        // Cannot access an archived entry
+                        this->innerResult(res).code(
+                            INVOKE_HOST_FUNCTION_ENTRY_ARCHIVED);
+                        return false;
+                    }
+                }
             }
 
             if (!isSorobanEntry(lk) || sorobanEntryLive)
@@ -439,16 +469,24 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
             }
 
             metrics.noteReadEntry(isCodeKey(lk), keySize, entrySize);
+            if (!validateContractLedgerEntry(lk, entrySize, sorobanConfig,
+                                             appConfig, mParentTx,
+                                             *sorobanData))
+            {
+                this->innerResult(res).code(
+                    INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
+                return false;
+            }
 
             if (resources.readBytes < metrics.mLedgerReadByte)
             {
-                mParentTx.pushSimpleDiagnosticError(
-                    SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+                sorobanData->pushApplyTimeDiagnosticError(
+                    appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
                     "operation byte-read resources exceeds amount specified",
                     {makeU64SCVal(metrics.mLedgerReadByte),
                      makeU64SCVal(resources.readBytes)});
 
-                this->innerResult().code(
+                this->innerResult(res).code(
                     INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
                 return false;
             }
@@ -479,15 +517,14 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
     out.success = false;
     try
     {
-        auto timeScope = metrics.getExecTimer();
         CxxBuf basePrngSeedBuf{};
         basePrngSeedBuf.data = std::make_unique<std::vector<uint8_t>>();
         basePrngSeedBuf.data->assign(sorobanBasePrngSeed.begin(),
                                      sorobanBasePrngSeed.end());
 
         out = rust_bridge::invoke_host_function(
-            cfg.CURRENT_LEDGER_PROTOCOL_VERSION,
-            cfg.ENABLE_SOROBAN_DIAGNOSTIC_EVENTS, resources.instructions,
+            appConfig.CURRENT_LEDGER_PROTOCOL_VERSION,
+            appConfig.ENABLE_SOROBAN_DIAGNOSTIC_EVENTS, resources.instructions,
             toCxxBuf(mInvokeHostFunction.hostFunction), toCxxBuf(resources),
             toCxxBuf(getSourceID()), authEntryCxxBufs,
             getLedgerInfo(ltx, app, sorobanConfig), ledgerEntryCxxBufs,
@@ -496,39 +533,51 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
         metrics.mCpuInsn = out.cpu_insns;
         metrics.mMemByte = out.mem_bytes;
         metrics.mInvokeTimeNsecs = out.time_nsecs;
+        metrics.mCpuInsnExclVm = out.cpu_insns_excluding_vm_instantiation;
+        metrics.mInvokeTimeNsecsExclVm =
+            out.time_nsecs_excluding_vm_instantiation;
         if (!out.success)
         {
-            maybePopulateDiagnosticEvents(cfg, out, metrics);
+            maybePopulateDiagnosticEvents(appConfig, out, metrics,
+                                          *sorobanData);
         }
     }
     catch (std::exception& e)
     {
+        // Host invocations should never throw an exception, so encountering
+        // one would be an internal error.
+        out.is_internal_error = true;
         CLOG_DEBUG(Tx, "Exception caught while invoking host fn: {}", e.what());
     }
 
     if (!out.success)
     {
+        if (out.is_internal_error)
+        {
+            throw std::runtime_error(
+                "Got internal error during Soroban host invocation.");
+        }
         if (resources.instructions < out.cpu_insns)
         {
-            mParentTx.pushSimpleDiagnosticError(
-                SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+            sorobanData->pushApplyTimeDiagnosticError(
+                appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
                 "operation instructions exceeds amount specified",
                 {makeU64SCVal(out.cpu_insns),
                  makeU64SCVal(resources.instructions)});
-            innerResult().code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
+            innerResult(res).code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
         }
         else if (sorobanConfig.txMemoryLimit() < out.mem_bytes)
         {
-            mParentTx.pushSimpleDiagnosticError(
-                SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+            sorobanData->pushApplyTimeDiagnosticError(
+                appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
                 "operation memory usage exceeds network config limit",
                 {makeU64SCVal(out.mem_bytes),
                  makeU64SCVal(sorobanConfig.txMemoryLimit())});
-            innerResult().code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
+            innerResult(res).code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
         }
         else
         {
-            innerResult().code(INVOKE_HOST_FUNCTION_TRAPPED);
+            innerResult(res).code(INVOKE_HOST_FUNCTION_TRAPPED);
         }
         return false;
     }
@@ -540,9 +589,11 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
     {
         LedgerEntry le;
         xdr::xdr_from_opaque(buf.data, le);
-        if (!validateContractLedgerEntry(le, buf.data.size(), sorobanConfig))
+        if (!validateContractLedgerEntry(LedgerEntryKey(le), buf.data.size(),
+                                         sorobanConfig, appConfig, mParentTx,
+                                         *sorobanData))
         {
-            innerResult().code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
+            innerResult(res).code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
             return false;
         }
 
@@ -559,12 +610,12 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
             metrics.noteWriteEntry(isCodeKey(lk), keySize, entrySize);
             if (resources.writeBytes < metrics.mLedgerWriteByte)
             {
-                mParentTx.pushSimpleDiagnosticError(
-                    SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+                sorobanData->pushApplyTimeDiagnosticError(
+                    appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
                     "operation byte-write resources exceeds amount specified",
                     {makeU64SCVal(metrics.mLedgerWriteByte),
                      makeU64SCVal(resources.writeBytes)});
-                innerResult().code(
+                innerResult(res).code(
                     INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
                 return false;
             }
@@ -634,12 +685,12 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
         if (sorobanConfig.txMaxContractEventsSizeBytes() <
             metrics.mEmitEventByte)
         {
-            mParentTx.pushSimpleDiagnosticError(
-                SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+            sorobanData->pushApplyTimeDiagnosticError(
+                appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
                 "total events size exceeds network config maximum",
                 {makeU64SCVal(metrics.mEmitEventByte),
                  makeU64SCVal(sorobanConfig.txMaxContractEventsSizeBytes())});
-            innerResult().code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
+            innerResult(res).code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
             return false;
         }
         ContractEvent evt;
@@ -647,52 +698,55 @@ InvokeHostFunctionOpFrame::doApply(Application& app, AbstractLedgerTxn& ltx,
         success.events.emplace_back(evt);
     }
 
-    maybePopulateDiagnosticEvents(cfg, out, metrics);
+    maybePopulateDiagnosticEvents(appConfig, out, metrics, *sorobanData);
 
     metrics.mEmitEventByte += static_cast<uint32>(out.result_value.data.size());
     if (sorobanConfig.txMaxContractEventsSizeBytes() < metrics.mEmitEventByte)
     {
-        mParentTx.pushSimpleDiagnosticError(
-            SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+        sorobanData->pushApplyTimeDiagnosticError(
+            appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
             "return value pushes events size above network config maximum",
             {makeU64SCVal(metrics.mEmitEventByte),
              makeU64SCVal(sorobanConfig.txMaxContractEventsSizeBytes())});
-        innerResult().code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
+        innerResult(res).code(INVOKE_HOST_FUNCTION_RESOURCE_LIMIT_EXCEEDED);
         return false;
     }
 
-    if (!mParentTx.consumeRefundableSorobanResources(
+    if (!sorobanData->consumeRefundableSorobanResources(
             metrics.mEmitEventByte, out.rent_fee,
-            ltx.loadHeader().current().ledgerVersion, sorobanConfig, cfg))
+            ltx.loadHeader().current().ledgerVersion, sorobanConfig, appConfig,
+            mParentTx))
     {
-        innerResult().code(INVOKE_HOST_FUNCTION_INSUFFICIENT_REFUNDABLE_FEE);
+        innerResult(res).code(INVOKE_HOST_FUNCTION_INSUFFICIENT_REFUNDABLE_FEE);
         return false;
     }
 
     xdr::xdr_from_opaque(out.result_value.data, success.returnValue);
-    innerResult().code(INVOKE_HOST_FUNCTION_SUCCESS);
-    innerResult().success() = xdrSha256(success);
+    innerResult(res).code(INVOKE_HOST_FUNCTION_SUCCESS);
+    innerResult(res).success() = xdrSha256(success);
 
-    mParentTx.pushContractEvents(std::move(success.events));
-    mParentTx.setReturnValue(std::move(success.returnValue));
+    sorobanData->pushContractEvents(success.events);
+    sorobanData->setReturnValue(success.returnValue);
     metrics.mSuccess = true;
     return true;
 }
 
 bool
-InvokeHostFunctionOpFrame::doCheckValid(SorobanNetworkConfig const& config,
-                                        uint32_t ledgerVersion)
+InvokeHostFunctionOpFrame::doCheckValidForSoroban(
+    SorobanNetworkConfig const& networkConfig, Config const& appConfig,
+    uint32_t ledgerVersion, OperationResult& res,
+    SorobanTxData& sorobanData) const
 {
     // check wasm size if uploading contract
     auto const& hostFn = mInvokeHostFunction.hostFunction;
     if (hostFn.type() == HOST_FUNCTION_TYPE_UPLOAD_CONTRACT_WASM &&
-        hostFn.wasm().size() > config.maxContractSizeBytes())
+        hostFn.wasm().size() > networkConfig.maxContractSizeBytes())
     {
-        mParentTx.pushSimpleDiagnosticError(
-            SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
-            "uploaded WASM size exceeds network config maximum contract size",
+        sorobanData.pushValidationTimeDiagnosticError(
+            appConfig, SCE_BUDGET, SCEC_EXCEEDED_LIMIT,
+            "uploaded Wasm size exceeds network config maximum contract size",
             {makeU64SCVal(hostFn.wasm().size()),
-             makeU64SCVal(config.maxContractSizeBytes())});
+             makeU64SCVal(networkConfig.maxContractSizeBytes())});
         return false;
     }
     if (hostFn.type() == HOST_FUNCTION_TYPE_CREATE_CONTRACT)
@@ -701,8 +755,8 @@ InvokeHostFunctionOpFrame::doCheckValid(SorobanNetworkConfig const& config,
         if (preimage.type() == CONTRACT_ID_PREIMAGE_FROM_ASSET &&
             !isAssetValid(preimage.fromAsset(), ledgerVersion))
         {
-            mParentTx.pushSimpleDiagnosticError(
-                SCE_VALUE, SCEC_INVALID_INPUT,
+            sorobanData.pushValidationTimeDiagnosticError(
+                appConfig, SCE_VALUE, SCEC_INVALID_INPUT,
                 "invalid asset to create contract from");
             return false;
         }
@@ -711,7 +765,8 @@ InvokeHostFunctionOpFrame::doCheckValid(SorobanNetworkConfig const& config,
 }
 
 bool
-InvokeHostFunctionOpFrame::doCheckValid(uint32_t ledgerVersion)
+InvokeHostFunctionOpFrame::doCheckValid(uint32_t ledgerVersion,
+                                        OperationResult& res) const
 {
     throw std::runtime_error(
         "InvokeHostFunctionOpFrame::doCheckValid needs Config");

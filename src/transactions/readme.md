@@ -76,8 +76,7 @@ such: the sequence number in the account is consumed, the fee is collected and
 the result set to "Failed".
 
 ## Result
-When transactions are applied (success or not), the result is saved in the 
-"txhistory" and "txfeehistory" tables in the database.
+When transactions are applied (success or not), the result will be emitted via LedgerCloseMeta (if configured).
 
 # Operations
 
@@ -134,11 +133,7 @@ transactions and LedgerDelta objects, this makes rolling back changes simpler.
 For each Operation, there is a matching Result type that gathers information on the key side effects 
 of the operation or in the case of failure records why in structured form.
 
-Results are queued in the txhistory table for other components to derive data:
-historical module for uploading it for long term storage, but also for API 
-servers to consume externally.
-The txfeehistory table is additional meta data that tracks changes to the ledger
-done before transactions are applied.
+Results are queued in LedgerCloseMeta to be consumed by downstream systems (if configured)
 
 ## List of operations
 See `src/xdr/Stellar-transaction.x` for a detailed list of all operations and results.

@@ -4,7 +4,7 @@
 
 #include "historywork/DownloadBucketsWork.h"
 #include "bucket/BucketManager.h"
-#include "catchup/CatchupManager.h"
+#include "catchup/LedgerApplyManager.h"
 #include "history/FileTransferInfo.h"
 #include "history/HistoryArchive.h"
 #include "historywork/GetAndUnzipRemoteFileWork.h"
@@ -17,7 +17,8 @@ namespace stellar
 {
 
 DownloadBucketsWork::DownloadBucketsWork(
-    Application& app, std::map<std::string, std::shared_ptr<Bucket>>& buckets,
+    Application& app,
+    std::map<std::string, std::shared_ptr<LiveBucket>>& buckets,
     std::vector<std::string> hashes, TmpDir const& downloadDir,
     std::shared_ptr<HistoryArchive> archive)
     : BatchWork{app, "download-verify-buckets"}
@@ -71,7 +72,7 @@ DownloadBucketsWork::yieldMoreWork()
     }
 
     auto hash = *mNextBucketIter;
-    FileTransferInfo ft(mDownloadDir, HISTORY_FILE_TYPE_BUCKET, hash);
+    FileTransferInfo ft(mDownloadDir, FileType::HISTORY_FILE_TYPE_BUCKET, hash);
     auto w1 = std::make_shared<GetAndUnzipRemoteFileWork>(mApp, ft, mArchive);
 
     auto getFileWeak = std::weak_ptr<GetAndUnzipRemoteFileWork>(w1);
@@ -94,7 +95,7 @@ DownloadBucketsWork::yieldMoreWork()
         if (self)
         {
             auto bucketPath = ft.localPath_nogz();
-            auto b = app.getBucketManager().adoptFileAsBucket(
+            auto b = app.getBucketManager().adoptFileAsBucket<LiveBucket>(
                 bucketPath, hexToBin256(hash),
                 /*mergeKey=*/nullptr,
                 /*index=*/nullptr);

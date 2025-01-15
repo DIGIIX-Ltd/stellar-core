@@ -25,7 +25,7 @@ HistoryArchiveManager::HistoryArchiveManager(Application& app) : mApp{app}
 {
     for (auto const& archiveConfiguration : mApp.getConfig().HISTORY)
         mArchives.push_back(
-            std::make_shared<HistoryArchive>(app, archiveConfiguration.second));
+            std::make_shared<HistoryArchive>(archiveConfiguration.second));
 }
 
 bool
@@ -239,7 +239,7 @@ HistoryArchiveManager::initializeHistoryArchive(std::string const& arch) const
 }
 
 bool
-HistoryArchiveManager::hasAnyWritableHistoryArchive() const
+HistoryArchiveManager::publishEnabled() const
 {
     return std::any_of(std::begin(mArchives), std::end(mArchives),
                        [](std::shared_ptr<HistoryArchive> const& x) {

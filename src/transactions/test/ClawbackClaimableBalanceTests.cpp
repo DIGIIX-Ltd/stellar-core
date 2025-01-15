@@ -19,7 +19,7 @@ using namespace stellar::txtest;
 TEST_CASE_VERSIONS("clawbackClaimableBalance",
                    "[tx][clawback][claimablebalance]")
 {
-    Config const& cfg = getTestConfig();
+    Config const& cfg = getTestConfig(0, Config::TESTDB_IN_MEMORY);
 
     VirtualClock clock;
     auto app = createTestApplication(clock, cfg);
@@ -113,8 +113,9 @@ TEST_CASE_VERSIONS("clawbackClaimableBalance",
                     LedgerTxn ltx(app->getLedgerTxnRoot());
                     TransactionMetaFrame txm(
                         ltx.loadHeader().current().ledgerVersion);
-                    REQUIRE(tx->checkValid(*app, ltx, 0, 0, 0));
-                    REQUIRE(tx->apply(*app, ltx, txm));
+                    REQUIRE(tx->checkValidForTesting(app->getAppConnector(),
+                                                     ltx, 0, 0, 0));
+                    REQUIRE(tx->apply(app->getAppConnector(), ltx, txm));
                     REQUIRE(tx->getResultCode() == txSUCCESS);
 
                     // the create is the second op in the tx

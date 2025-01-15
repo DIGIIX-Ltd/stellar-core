@@ -19,30 +19,43 @@ namespace stellar
 using namespace std;
 
 std::string PersistentState::mapping[kLastEntry] = {
-    "lastclosedledger", "historyarchivestate", "lastscpdata",
-    "databaseschema",   "networkpassphrase",   "ledgerupgrades",
-    "rebuildledger",    "lastscpdataxdr",      "txset",
-    "dbbackend"};
+    "lastclosedledger",  "historyarchivestate", "databaseschema",
+    "networkpassphrase", "dbbackend",           "rebuildledger",
+    "ledgerupgrades",    "lastscpdataxdr",      "txset"};
 
 std::string PersistentState::kSQLCreateStatement =
     "CREATE TABLE IF NOT EXISTS storestate ("
-    "statename   CHARACTER(32) PRIMARY KEY,"
+    "statename   CHARACTER(70) PRIMARY KEY,"
     "state       TEXT"
     "); ";
 
+// Persist consensus slot data
+std::string PersistentState::kSQLCreateSCPStatement =
+    "CREATE TABLE IF NOT EXISTS slotstate ("
+    "statename   CHARACTER(70) PRIMARY KEY,"
+    "state       TEXT"
+    "); ";
+
+std::string PersistentState::kLCLTableName = "storestate";
+std::string PersistentState::kSlotTableName = "slotstate";
+
 PersistentState::PersistentState(Application& app) : mApp(app)
 {
+    releaseAssert(threadIsMain());
 }
 
 void
-PersistentState::deleteTxSets(std::unordered_set<Hash> hashesToDelete)
+PersistentState::deleteTxSets(std::unordered_set<Hash> hashesToDelete,
+                              std::string table)
 {
-    soci::transaction tx(mApp.getDatabase().getSession());
+    releaseAssert(threadIsMain());
+    soci::transaction tx(mApp.getDatabase().getRawSession());
     for (auto const& hash : hashesToDelete)
     {
         auto name = getStoreStateNameForTxSet(hash);
         auto prep = mApp.getDatabase().getPreparedStatement(
-            "DELETE FROM storestate WHERE statename = :n;");
+            fmt::format("DELETE FROM {} WHERE statename = :n;", table),
+            mApp.getDatabase().getSession());
 
         auto& st = prep.statement();
         st.exchange(soci::use(name));
@@ -53,19 +66,76 @@ PersistentState::deleteTxSets(std::unordered_set<Hash> hashesToDelete)
 }
 
 void
-PersistentState::upgradeSizeLimit(Database& db)
+PersistentState::migrateToSlotStateTable()
 {
-    db.getSession()
-        << "ALTER TABLE storestate ALTER COLUMN statename TYPE CHARACTER(70);";
+    // No soci::transaction needed, because the migration in Database.cpp wraps
+    // everything in one transaction anyway.
+    releaseAssert(threadIsMain());
+    auto& db = mApp.getDatabase();
+
+    // First, create the new table
+    db.getRawSession() << PersistentState::kSQLCreateSCPStatement;
+
+    // Migrate all the tx sets
+    auto txSets = getTxSetsForAllSlots(kLCLTableName);
+    std::unordered_set<Hash> keysToDelete;
+    for (auto const& txSet : txSets)
+    {
+        CLOG_INFO(Herder, "Migrating tx set {} to slotstate",
+                  hexAbbrev(txSet.first));
+        updateDb(getStoreStateNameForTxSet(txSet.first), txSet.second,
+                 db.getSession(), kSlotTableName);
+        keysToDelete.insert(txSet.first);
+    }
+
+    // Cleanup tx sets from the previous table
+    deleteTxSets(keysToDelete, kLCLTableName);
+
+    // Migrate all SCP slot data
+    auto scpStates = getSCPStateAllSlots(kLCLTableName);
+    for (auto const& [i, scpState] : scpStates)
+    {
+        CLOG_INFO(Herder, "Migrating SCP state for slot {} to slotstate", i);
+        setSCPStateForSlot(i, scpState);
+        auto prep = mApp.getDatabase().getPreparedStatement(
+            "DELETE FROM storestate WHERE statename = :n;",
+            mApp.getDatabase().getSession());
+        auto name = getStoreStateName(kLastSCPDataXDR, i);
+
+        auto& st = prep.statement();
+        st.exchange(soci::use(name));
+        st.define_and_bind();
+        st.execute(true);
+    }
+
+    // Migrate upgrade data
+    auto upgradeName = getStoreStateName(kLedgerUpgrades);
+    auto upgrades = getFromDb(upgradeName, db.getSession(), kLCLTableName);
+    if (!upgrades.empty())
+    {
+        updateDb(upgradeName, upgrades, db.getSession(), kSlotTableName);
+        auto prep = mApp.getDatabase().getPreparedStatement(
+            "DELETE FROM storestate WHERE statename = :n;",
+            mApp.getDatabase().getSession());
+
+        auto& st = prep.statement();
+        st.exchange(soci::use(upgradeName));
+        st.define_and_bind();
+        st.execute(true);
+    }
 }
 
 void
 PersistentState::dropAll(Database& db)
 {
-    db.getSession() << "DROP TABLE IF EXISTS storestate;";
-
-    soci::statement st = db.getSession().prepare << kSQLCreateStatement;
+    releaseAssert(threadIsMain());
+    db.getRawSession() << "DROP TABLE IF EXISTS storestate;";
+    soci::statement st = db.getRawSession().prepare << kSQLCreateStatement;
     st.execute(true);
+
+    db.getRawSession() << "DROP TABLE IF EXISTS slotstate;";
+    soci::statement st2 = db.getRawSession().prepare << kSQLCreateSCPStatement;
+    st2.execute(true);
 }
 
 std::string
@@ -76,8 +146,7 @@ PersistentState::getStoreStateName(PersistentState::Entry n, uint32 subscript)
         throw out_of_range("unknown entry");
     }
     auto res = mapping[n];
-    if (((n == kLastSCPData || n == kLastSCPDataXDR) && subscript > 0) ||
-        n == kRebuildLedger)
+    if ((n == kLastSCPDataXDR && subscript > 0) || n == kRebuildLedger)
     {
         res += std::to_string(subscript);
     }
@@ -95,36 +164,61 @@ PersistentState::getStoreStateNameForTxSet(Hash const& txSetHash)
 bool
 PersistentState::hasTxSet(Hash const& txSetHash)
 {
-    return entryExists(getStoreStateNameForTxSet(txSetHash));
+    releaseAssert(threadIsMain());
+
+    int res = 0;
+    auto entry = getStoreStateNameForTxSet(txSetHash);
+
+    auto& db = mApp.getDatabase();
+    auto prep = db.getPreparedStatement(
+        "SELECT COUNT(*) FROM slotstate WHERE statename = :n;",
+        db.getSession());
+    auto& st = prep.statement();
+    st.exchange(soci::into(res));
+    st.exchange(soci::use(entry));
+    st.define_and_bind();
+    st.execute(true);
+
+    return res > 0;
 }
 
 std::string
-PersistentState::getState(PersistentState::Entry entry)
+PersistentState::getDBForEntry(PersistentState::Entry entry)
+{
+    releaseAssert(entry != kLastEntry);
+    return entry <= kRebuildLedger ? kLCLTableName : kSlotTableName;
+}
+
+std::string
+PersistentState::getState(PersistentState::Entry entry, SessionWrapper& session)
 {
     ZoneScoped;
-    return getFromDb(getStoreStateName(entry));
+    return getFromDb(getStoreStateName(entry), session, getDBForEntry(entry));
 }
 
 void
 PersistentState::setState(PersistentState::Entry entry,
-                          std::string const& value)
+                          std::string const& value, SessionWrapper& session)
 {
     ZoneScoped;
-    updateDb(getStoreStateName(entry), value);
+    updateDb(getStoreStateName(entry), value, session, getDBForEntry(entry));
 }
 
-std::vector<std::string>
-PersistentState::getSCPStateAllSlots()
+std::unordered_map<uint32_t, std::string>
+PersistentState::getSCPStateAllSlots(std::string table)
 {
     ZoneScoped;
+    releaseAssert(threadIsMain());
+
     // Collect all slots persisted
-    std::vector<std::string> states;
+    std::unordered_map<uint32_t, std::string> states;
     for (uint32 i = 0; i <= mApp.getConfig().MAX_SLOTS_TO_REMEMBER; i++)
     {
-        auto val = getFromDb(getStoreStateName(kLastSCPDataXDR, i));
+        auto val = getFromDb(getStoreStateName(kLastSCPDataXDR, i),
+                             mApp.getDatabase().getSession(), table);
         if (!val.empty())
         {
-            states.push_back(val);
+            states.emplace(i, val);
         }
     }
 
@@ -135,9 +229,12 @@ void
 PersistentState::setSCPStateForSlot(uint64 slot, std::string const& value)
 {
     ZoneScoped;
+    releaseAssert(threadIsMain());
+
     auto slotIdx = static_cast<uint32>(
         slot % (mApp.getConfig().MAX_SLOTS_TO_REMEMBER + 1));
-    updateDb(getStoreStateName(kLastSCPDataXDR, slotIdx), value);
+    updateDb(getStoreStateName(kLastSCPDataXDR, slotIdx), value,
+             mApp.getDatabase().getSession(), kSlotTableName);
 }
 
 void
@@ -145,157 +242,58 @@ PersistentState::setSCPStateV1ForSlot(
     uint64 slot, std::string const& value,
     std::unordered_map<Hash, std::string> const& txSets)
 {
-    soci::transaction tx(mApp.getDatabase().getSession());
+    releaseAssert(threadIsMain());
+
+    soci::transaction tx(mApp.getDatabase().getRawSession());
     setSCPStateForSlot(slot, value);
 
     for (auto const& txSet : txSets)
     {
-        updateDb(getStoreStateNameForTxSet(txSet.first), txSet.second);
+        updateDb(getStoreStateNameForTxSet(txSet.first), txSet.second,
+                 mApp.getDatabase().getSession(), kSlotTableName);
     }
     tx.commit();
 }
 
 bool
-PersistentState::shouldRebuildForType(LedgerEntryType let)
+PersistentState::shouldRebuildForOfferTable()
 {
     ZoneScoped;
-    return !getFromDb(getStoreStateName(kRebuildLedger, let)).empty();
+    releaseAssert(threadIsMain());
+
+    return !getFromDb(getStoreStateName(kRebuildLedger, OFFER),
+                      mApp.getDatabase().getSession(), kLCLTableName)
+                .empty();
 }
 
 void
-PersistentState::clearRebuildForType(LedgerEntryType let)
+PersistentState::clearRebuildForOfferTable()
 {
     ZoneScoped;
-    updateDb(getStoreStateName(kRebuildLedger, let), "");
+    releaseAssert(threadIsMain());
+
+    updateDb(getStoreStateName(kRebuildLedger, OFFER), "",
+             mApp.getDatabase().getSession(), kLCLTableName);
 }
 
 void
-PersistentState::setRebuildForType(LedgerEntryType let)
+PersistentState::setRebuildForOfferTable()
 {
     ZoneScoped;
-
-    // Only allow rebuilds for offer table if BucketListDB enabled, other tables
-    // don't exist
-    if (mApp.getConfig().isUsingBucketListDB() && let != OFFER)
-    {
-        return;
-    }
-
-    updateDb(getStoreStateName(kRebuildLedger, let), "1");
+    releaseAssert(threadIsMain());
+    updateDb(getStoreStateName(kRebuildLedger, OFFER), "1",
+             mApp.getDatabase().getSession(), kLCLTableName);
 }
 
 void
-PersistentState::upgradeSCPDataV1Format()
-{
-    // Sqlite does not enforce size limits and does not support altering columns
-    if (!mApp.getDatabase().isSqlite())
-    {
-        PersistentState::upgradeSizeLimit(mApp.getDatabase());
-    }
-
-    for (uint32_t i = 0; i <= mApp.getConfig().MAX_SLOTS_TO_REMEMBER; i++)
-    {
-        std::string oldStateName = getStoreStateName(kLastSCPDataXDR, i);
-        auto val = getFromDb(oldStateName);
-        if (val.empty())
-        {
-            continue;
-        }
-        std::vector<uint8_t> buffer;
-        decoder::decode_b64(val, buffer);
-
-        PersistedSCPState scpState;
-
-        try
-        {
-            xdr::xdr_from_opaque(buffer, scpState);
-            if (scpState.v() != 0)
-            {
-                throw std::runtime_error("Invalid persisted state version");
-            }
-
-            PersistedSCPState newScpState;
-            newScpState.v(1);
-            newScpState.v1().scpEnvelopes = scpState.v0().scpEnvelopes;
-            newScpState.v1().quorumSets = scpState.v0().quorumSets;
-
-            std::unordered_map<Hash, std::string> txSets;
-            for (auto const& txSet : scpState.v0().txSets)
-            {
-                auto txSetPtr = TxSetFrame::makeFromStoredTxSet(txSet);
-                txSets.emplace(txSetPtr->getContentsHash(),
-                               decoder::encode_b64(xdr::xdr_to_opaque(txSet)));
-            }
-            auto encodedScpState =
-                decoder::encode_b64(xdr::xdr_to_opaque(newScpState));
-            setSCPStateV1ForSlot(i, encodedScpState, txSets);
-        }
-        catch (std::exception& e)
-        {
-            CLOG_WARNING(Herder,
-                         "Error while restoring old scp messages, during the "
-                         "SCP data format upgrade: {}",
-                         e.what());
-        }
-    }
-}
-
-void
-PersistentState::upgradeSCPDataFormat()
-{
-    for (uint32_t i = 0; i <= mApp.getConfig().MAX_SLOTS_TO_REMEMBER; i++)
-    {
-        // Read the state in old (opaque) format and convert it to
-        // PersistedSCPState XDR.
-        std::string oldStateName = getStoreStateName(kLastSCPData, i);
-        auto val = getFromDb(oldStateName);
-        if (val.empty())
-        {
-            continue;
-        }
-        std::vector<uint8_t> buffer;
-        decoder::decode_b64(val, buffer);
-
-        PersistedSCPState scpState;
-        try
-        {
-            xdr::xvector<TransactionSet> txSets;
-            xdr::xdr_from_opaque(buffer, scpState.v0().scpEnvelopes, txSets,
-                                 scpState.v0().quorumSets);
-
-            for (auto const& txSet : txSets)
-            {
-                scpState.v0().txSets.emplace_back(0).txSet() = txSet;
-            }
-            auto encodedScpState =
-                decoder::encode_b64(xdr::xdr_to_opaque(scpState));
-            setSCPStateForSlot(i, encodedScpState);
-        }
-        catch (std::exception& e)
-        {
-            CLOG_WARNING(Herder,
-                         "Error while restoring old scp messages, during the "
-                         "database schema upgrade: {}",
-                         e.what());
-        }
-
-        // Remove the old SCP state row.
-        auto prep = mApp.getDatabase().getPreparedStatement(
-            "DELETE FROM storestate WHERE statename = :n;");
-
-        auto& st = prep.statement();
-        st.exchange(soci::use(oldStateName));
-        st.define_and_bind();
-        st.execute(true);
-    }
-}
-
-void
-PersistentState::updateDb(std::string const& entry, std::string const& value)
+PersistentState::updateDb(std::string const& entry, std::string const& value,
+                          SessionWrapper& sess, std::string const& tableName)
 {
     ZoneScoped;
     auto prep = mApp.getDatabase().getPreparedStatement(
-        "UPDATE storestate SET state = :v WHERE statename = :n;");
+        fmt::format("UPDATE {} SET state = :v WHERE statename = :n;",
+                    tableName),
+        sess);
 
     auto& st = prep.statement();
     st.exchange(soci::use(value));
@@ -306,11 +304,14 @@ PersistentState::updateDb(std::string const& entry, std::string const& value)
         st.execute(true);
     }
 
-    if (st.get_affected_rows() != 1 && getFromDb(entry).empty())
+    if (st.get_affected_rows() != 1 &&
+        getFromDb(entry, sess, tableName).empty())
     {
         ZoneNamedN(insertStoreStateZone, "insert storestate", true);
         auto prep2 = mApp.getDatabase().getPreparedStatement(
-            "INSERT INTO storestate (statename, state) VALUES (:n, :v);");
+            fmt::format("INSERT INTO {} (statename, state) VALUES (:n, :v);",
+                        tableName),
+            sess);
         auto& st2 = prep2.statement();
         st2.exchange(soci::use(entry));
         st2.exchange(soci::use(value));
@@ -323,19 +324,23 @@ PersistentState::updateDb(std::string const& entry, std::string const& value)
     }
 }
 
-std::vector<std::string>
-PersistentState::getTxSetsForAllSlots()
+std::unordered_map<Hash, std::string>
+PersistentState::getTxSetsForAllSlots(std::string table)
 {
     ZoneScoped;
-    std::vector<std::string> result;
+    releaseAssert(threadIsMain());
+
+    std::unordered_map<Hash, std::string> result;
+    std::string key;
     std::string val;
 
     std::string pattern = mapping[kTxSet] + "%";
-    std::string statementStr =
-        "SELECT state FROM storestate WHERE statename LIKE :n;";
+    std::string statementStr = fmt::format(
+        "SELECT statename, state FROM {} WHERE statename LIKE :n;", table);
     auto& db = mApp.getDatabase();
-    auto prep = db.getPreparedStatement(statementStr);
+    auto prep = db.getPreparedStatement(statementStr, db.getSession());
     auto& st = prep.statement();
+    st.exchange(soci::into(key));
     st.exchange(soci::into(val));
     st.exchange(soci::use(pattern));
     st.define_and_bind();
@@ -344,9 +349,13 @@ PersistentState::getTxSetsForAllSlots()
         st.execute(true);
     }
 
+    Hash hash;
+    size_t len = binToHex(hash).size();
+
     while (st.got_data())
     {
-        result.push_back(val);
+        result.emplace(hexToBin256(key.substr(mapping[kTxSet].size(), len)),
+                       val);
         st.fetch();
     }
 
@@ -357,14 +366,16 @@ std::unordered_set<Hash>
 PersistentState::getTxSetHashesForAllSlots()
 {
     ZoneScoped;
+    releaseAssert(threadIsMain());
+
     std::unordered_set<Hash> result;
     std::string val;
 
     std::string pattern = mapping[kTxSet] + "%";
     std::string statementStr =
-        "SELECT statename FROM storestate WHERE statename LIKE :n;";
+        "SELECT statename FROM slotstate WHERE statename LIKE :n;";
     auto& db = mApp.getDatabase();
-    auto prep = db.getPreparedStatement(statementStr);
+    auto prep = db.getPreparedStatement(statementStr, db.getSession());
     auto& st = prep.statement();
     st.exchange(soci::into(val));
     st.exchange(soci::use(pattern));
@@ -388,14 +399,16 @@ PersistentState::getTxSetHashesForAllSlots()
 }
 
 std::string
-PersistentState::getFromDb(std::string const& entry)
+PersistentState::getFromDb(std::string const& entry, SessionWrapper& sess,
+                           std::string const& tableName)
 {
     ZoneScoped;
     std::string res;
 
     auto& db = mApp.getDatabase();
     auto prep = db.getPreparedStatement(
-        "SELECT state FROM storestate WHERE statename = :n;");
+        fmt::format("SELECT state FROM {} WHERE statename = :n;", tableName),
+        sess);
     auto& st = prep.statement();
     st.exchange(soci::into(res));
     st.exchange(soci::use(entry));
@@ -411,23 +424,5 @@ PersistentState::getFromDb(std::string const& entry)
     }
 
     return res;
-}
-
-bool
-PersistentState::entryExists(std::string const& entry)
-{
-    ZoneScoped;
-    int res = 0;
-
-    auto& db = mApp.getDatabase();
-    auto prep = db.getPreparedStatement(
-        "SELECT COUNT(*) FROM storestate WHERE statename = :n;");
-    auto& st = prep.statement();
-    st.exchange(soci::into(res));
-    st.exchange(soci::use(entry));
-    st.define_and_bind();
-    st.execute(true);
-
-    return res > 0;
 }
 }

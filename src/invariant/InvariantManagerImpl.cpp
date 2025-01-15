@@ -3,8 +3,8 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 #include "invariant/InvariantManagerImpl.h"
-#include "bucket/Bucket.h"
-#include "bucket/BucketList.h"
+#include "bucket/LiveBucket.h"
+#include "bucket/LiveBucketList.h"
 #include "crypto/Hex.h"
 #include "invariant/Invariant.h"
 #include "invariant/InvariantDoesNotHold.h"
@@ -69,21 +69,30 @@ InvariantManagerImpl::getEnabledInvariants() const
     return res;
 }
 
+bool
+InvariantManagerImpl::isBucketApplyInvariantEnabled() const
+{
+    return std::any_of(mEnabled.begin(), mEnabled.end(), [](auto const& inv) {
+        return inv->getName() == "BucketListIsConsistentWithDatabase";
+    });
+}
+
 void
 InvariantManagerImpl::checkOnBucketApply(
-    std::shared_ptr<Bucket const> bucket, uint32_t ledger, uint32_t level,
-    bool isCurr, std::function<bool(LedgerEntryType)> entryTypeFilter)
+    std::shared_ptr<LiveBucket const> bucket, uint32_t ledger, uint32_t level,
+    bool isCurr, std::unordered_set<LedgerKey> const& shadowedKeys)
 {
-    uint32_t oldestLedger = isCurr
-                                ? BucketList::oldestLedgerInCurr(ledger, level)
-                                : BucketList::oldestLedgerInSnap(ledger, level);
-    uint32_t newestLedger = oldestLedger - 1 +
-                            (isCurr ? BucketList::sizeOfCurr(ledger, level)
-                                    : BucketList::sizeOfSnap(ledger, level));
+    uint32_t oldestLedger =
+        isCurr ? LiveBucketList::oldestLedgerInCurr(ledger, level)
+               : LiveBucketList::oldestLedgerInSnap(ledger, level);
+    uint32_t newestLedger =
+        oldestLedger - 1 +
+        (isCurr ? LiveBucketList::sizeOfCurr(ledger, level)
+                : LiveBucketList::sizeOfSnap(ledger, level));
     for (auto invariant : mEnabled)
     {
-        auto result = invariant->checkOnBucketApply(
-            bucket, oldestLedger, newestLedger, entryTypeFilter);
+        auto result = invariant->checkOnBucketApply(bucket, oldestLedger,
+                                                    newestLedger, shadowedKeys);
         if (result.empty())
         {
             continue;
@@ -95,6 +104,25 @@ InvariantManagerImpl::checkOnBucketApply(
             invariant->getName(), isCurr ? "Curr" : "Snap", level,
             binToHex(bucket->getHash()), result);
         onInvariantFailure(invariant, message, ledger);
+    }
+}
+
+void
+InvariantManagerImpl::checkAfterAssumeState(uint32_t newestLedger)
+{
+    for (auto invariant : mEnabled)
+    {
+        auto result = invariant->checkAfterAssumeState(newestLedger);
+        if (result.empty())
+        {
+            continue;
+        }
+
+        auto message = fmt::format(
+            FMT_STRING(
+                R"(invariant "{}" does not hold after assume state: {})"),
+            invariant->getName(), result);
+        onInvariantFailure(invariant, message, 0);
     }
 }
 
@@ -121,7 +149,7 @@ InvariantManagerImpl::checkOnOperationApply(Operation const& operation,
         auto message = fmt::format(
             FMT_STRING(R"(Invariant "{}" does not hold on operation: {}{}{})"),
             invariant->getName(), result, "\n",
-            xdr_to_string(operation, "Operation"));
+            xdrToCerealString(operation, "Operation"));
         onInvariantFailure(invariant, message,
                            ltxDelta.header.current.ledgerSeq);
     }
